@@ -1,12 +1,12 @@
 ## Задание по семестровой №2: Gartic Phone
 
-**Цель:** Реализовать сетевую игру для 2+ игроков на Java (Swing + сокеты). Client-Server-Client архитектура. Собственный протокол с 4+ типами сообщений. GUI с рисованием (Graphics) и чатом. Многопоточность для сети/интерфейса.
+**Цель:** Реализовать сетевую игру для 2+ игроков на Java (JavaFX + сокеты). Client-Server-Client архитектура. Собственный протокол с 4+ типами сообщений. GUI с рисованием (Graphics) и чатом. Многопоточность для сети/интерфейса.
 
-**Репозиторий преподавателя:** В 11_402 есть примеры сокетов (Сокеты1/2 записи), Swing-компоненты. Бери структуру Client/Server оттуда.
+**Репозиторий преподавателя:** В 11_402 есть примеры сокетов (Сокеты1/2 записи). Бери структуру Client/Server оттуда.
 
 **Требования к коду (строго):**
 
-- Только чистые сокеты + Swing (без Spring/Netty).
+- Только чистые сокеты + JavaFX (без Spring/Netty).
 - Минимум комментариев.
 - Каждый в группе знает весь код.
 - Протокол: JSON/байты с типами сообщений (минимум 4 видимых игроку).
@@ -49,10 +49,8 @@
 3. `NEXT_ROUND` - "Получили: [текст/картинка]".
 4. `FINAL_CHAIN` - вся цепочка.
 
+## Архитектура (Client/Server) — JavaFX
 
-## Архитектура (Client/Server)
-
-```
 Server:
 - ServerSocket (8080)
 - HashMap<Socket, Player> (игроки)
@@ -61,28 +59,23 @@ Server:
 
 Client:
 - Socket → ObjectOutputStream/InputStream
-- JFrame: Canvas (JPanel override paintComponent(Graphics2D))
-- JPanel: Чат (JTextArea), Кнопки (Готов/Старт/Отправить), Таймер JLabel
-- SwingWorker для сети (не блокирует EDT)
+- JavaFX Stage/Scene
+- Canvas (javafx.scene.canvas.Canvas) + GraphicsContext для рисования
+- VBox/HBox/BorderPane для раскладки
+- TextArea (чат), TextField (ввод), Button (Готов/Старт/Отправить), Label (таймер/статус)
+- Отдельный поток для сети + Platform.runLater(...) для обновления UI
 
 Протокол (JSON пример):
 { "type": "DRAW", "data": {x:10,y:20,color:"red",size:2} }
 { "type": "GUESS", "data": "кот" }
-```
 
 
-## GUI и рисование (3 балла)
+## GUI и рисование (3 балла) — JavaFX
 
-- **Компоненты:** JButton (Готов/Старт/Очистить), JTextField (ввод), JTextArea (чат/цепочка), JComboBox (цвета), JLabel (таймер/статус).
-- **Рисование:** JPanel canvas (mouseDragged → Graphics2D.drawLine). Сохранять strokes как List<Path2D> для отправки/рендера.
-- **Адаптивность:** BorderLayout, pack(). repaint() в SwingWorker.
+- Компоненты: Button (Готов/Старт/Очистить), TextField (ввод), TextArea (чат/цепочка), ComboBox<String> (цвета), Label (таймер/статус).
+- Рисование: Canvas, обработчики setOnMousePressed / setOnMouseDragged → GraphicsContext.strokeLine(...). Сохранять strokes как List<StrokeDto> (последовательность точек) для отправки/рендера.
+- Адаптивность: BorderPane/ VBox / HBox, привязки по ширине/высоте (bind), использование Scene и resizeable Stage; обновление Canvas через перерисовку по данным с сервера в Platform.runLater.
 
-
-## Разбивка задач (Даня/Артур)
-
-- **Даня:** Server (логика комнаты/раундов), протокол, многопоточность.
-- **Артур:** Client GUI (Canvas+чат), рисование Graphics2D, SwingWorker.
-- **Вместе:** Тестирование client-server-client (локальная сеть).
 
 **Дедлайн:** Прототип к 20.12, финал к 25.12. Запуск: java -jar server.jar; java -jar client.jar IP.**
 
