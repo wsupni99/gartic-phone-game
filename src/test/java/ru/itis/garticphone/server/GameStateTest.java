@@ -9,7 +9,7 @@ class GameStateTest {
 
     @Test
     void shouldAddAndRemovePlayers() {
-        GameState gameState = new GameState(1, GameMode.GUESS_DRAW);
+        GameState gameState = new GameState(1, GameMode.GUESS_DRAWING);
 
         Player player1 = new Player(1, "P1");
         Player player2 = new Player(2, "P2");
@@ -28,7 +28,7 @@ class GameStateTest {
 
     @Test
     void shouldIncreaseRoundAndReset() {
-        GameState gameState = new GameState(1, GameMode.TELEPHONE);
+        GameState gameState = new GameState(1, GameMode.DEAF_PHONE);
 
         assertEquals(1, gameState.getRound());
         gameState.nextRound();
@@ -41,7 +41,7 @@ class GameStateTest {
 
     @Test
     void timerShouldDecreaseButNotBelowZero() {
-        GameState gameState = new GameState(1, GameMode.GUESS_DRAW);
+        GameState gameState = new GameState(1, GameMode.GUESS_DRAWING);
 
         gameState.setTimerSeconds(2);
         gameState.decrementTimer();

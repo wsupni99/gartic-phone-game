@@ -2,9 +2,7 @@ package ru.itis.garticphone.server;
 
 import ru.itis.garticphone.client.Player;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public class GameState {
     private final int roomId;
@@ -12,6 +10,7 @@ public class GameState {
     private final List<Player> players;
     private int round;
     private int timerSeconds;
+    private final Map<Integer, List<ChainStep>> chains = new HashMap<>();
 
     public GameState(int roomId, GameMode mode) {
         this.roomId = roomId;
@@ -71,5 +70,13 @@ public class GameState {
         if (timerSeconds > 0) {
             timerSeconds--;
         }
+    }
+
+    public Map<Integer, List<ChainStep>> getChains() {
+        return chains;
+    }
+
+    public void clearChains() {
+        chains.clear();
     }
 }

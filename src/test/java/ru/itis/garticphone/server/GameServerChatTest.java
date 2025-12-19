@@ -37,7 +37,7 @@ class GameServerChatTest {
     void chatShouldBroadcastWithinRoom() throws Exception {
         GameServer server = new GameServer();
 
-        GameState room = new GameState(1, GameMode.GUESS_DRAW);
+        GameState room = new GameState(1, GameMode.GUESS_DRAWING);
         TestPlayer p1 = new TestPlayer(1, "P1");
         TestPlayer p2 = new TestPlayer(2, "P2");
         room.addPlayer(p1);

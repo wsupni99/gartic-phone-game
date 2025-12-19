@@ -13,6 +13,7 @@ public class Player {
     private final Socket socket;
     private final BufferedReader in;
     private final PrintWriter out;
+    private byte[] lastDrawing;
 
     public Player(int id, String name, Socket socket) throws IOException {
         this.id = id;
@@ -74,5 +75,13 @@ public class Player {
             socket.close();
         } catch (IOException ignored) {
         }
+    }
+
+    public byte[] getLastDrawing() {
+        return lastDrawing;
+    }
+
+    public void setLastDrawing(byte[] lastDrawing) {
+        this.lastDrawing = lastDrawing;
     }
 }

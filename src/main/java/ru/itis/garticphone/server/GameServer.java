@@ -13,6 +13,8 @@ import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class GameServer {
 
@@ -22,8 +24,9 @@ public class GameServer {
     private final Map<Integer, GameState> rooms = new HashMap<>();
     private final Map<Integer, String> secretWords = new HashMap<>();
     private final Map<Integer, Set<Integer>> readyPlayers = new HashMap<>();
-
+    private final List<String> words = Arrays.asList("кот", "дом", "дерево", "машина", "солнце");
     private final ExecutorService executorService = Executors.newCachedThreadPool();
+    private final ScheduledExecutorService roundScheduler = Executors.newScheduledThreadPool(1);
     private int nextPlayerId = 1;
 
     public static void main(String[] args) {
@@ -41,6 +44,7 @@ public class GameServer {
             e.printStackTrace();
         } finally {
             executorService.shutdownNow();
+            roundScheduler.shutdownNow();
         }
     }
 
@@ -87,6 +91,7 @@ public class GameServer {
 
     private void routeMessage(Player player, Message message) {
         if (message.getType() == null) {
+            sendError(getWriter(player), "400", "Тип сообщения не задан");
             return;
         }
         switch (message.getType()) {
@@ -115,7 +120,16 @@ public class GameServer {
                 handleLeave(player);
                 break;
             default:
+                sendError(getWriter(player), "400", "Неизвестный тип сообщения: " + message.getType());
                 break;
+        }
+    }
+
+    private PrintWriter getWriter(Player player) {
+        try {
+            return new PrintWriter(player.getSocket().getOutputStream(), true);
+        } catch (IOException e) {
+            return new PrintWriter(System.out, true);
         }
     }
 
@@ -131,7 +145,7 @@ public class GameServer {
         synchronized (rooms) {
             gameState = rooms.get(roomId);
             if (gameState == null) {
-                gameState = new GameState(roomId, GameMode.GUESS_DRAW);
+                gameState = new GameState(roomId, GameMode.GUESS_DRAWING);
                 rooms.put(roomId, gameState);
             }
             gameState.addPlayer(player);
@@ -182,6 +196,7 @@ public class GameServer {
         int roomId = message.getRoomId();
         GameState room = rooms.get(roomId);
         if (room == null) {
+            sendError(getWriter(from), "404", "Комната не найдена");
             return;
         }
 
@@ -204,7 +219,18 @@ public class GameServer {
         int roomId = message.getRoomId();
         GameState room = rooms.get(roomId);
         if (room == null) {
+            sendError(getWriter(from), "404", "Комната не найдена");
             return;
+        }
+
+        if (room.getMode() == GameMode.DEAF_PHONE) {
+            if (message.getPayload() == null) {
+                sendError(getWriter(from), "400", "Пустой рисунок");
+                return;
+            }
+            room.getChains()
+                    .computeIfAbsent(from.getId(), id -> new ArrayList<>())
+                    .add(new ChainStep(message.getPayload().getBytes()));
         }
 
         Message response = new Message(
@@ -214,8 +240,8 @@ public class GameServer {
                 from.getName(),
                 message.getPayload()
         );
-        String json = toJson(response);
 
+        String json = toJson(response);
         for (Player player : room.getPlayers()) {
             player.sendLine(json);
         }
@@ -225,7 +251,8 @@ public class GameServer {
         int roomId = message.getRoomId();
         String guess = message.getPayload();
         String secret = secretWords.get(roomId);
-        if (secret == null || guess == null) {
+        if (secret == null || guess == null || guess.isBlank()) {
+            sendError(getWriter(from), "400", "Пустое предположение или слово не задано");
             return;
         }
 
@@ -248,6 +275,7 @@ public class GameServer {
             for (Player player : room.getPlayers()) {
                 player.sendLine(json);
             }
+            endRound(roomId);
         }
     }
 
@@ -256,6 +284,7 @@ public class GameServer {
         readyPlayers.computeIfAbsent(roomId, id -> new HashSet<>()).add(player.getId());
         GameState room = rooms.get(roomId);
         if (room == null) {
+            sendError(getWriter(player), "404", "Комната не найдена");
             return;
         }
 
@@ -280,6 +309,7 @@ public class GameServer {
         int roomId = message.getRoomId();
         GameState room = rooms.get(roomId);
         if (room == null) {
+            sendError(getWriter(player), "404", "Комната не найдена");
             return;
         }
 
@@ -287,9 +317,17 @@ public class GameServer {
         room.setTimerSeconds(roundDuration);
         room.resetRound();
 
+        if (room.getMode() == GameMode.GUESS_DRAWING) {
+            String word = generateWord();
+            secretWords.put(roomId, word);
+        } else if (room.getMode() == GameMode.DEAF_PHONE) {
+            room.clearChains();
+        }
+
         String payload = "{\"roundDuration\":" + roundDuration +
                 ",\"totalPlayers\":" + room.getPlayers().size() +
                 ",\"stage\":1}";
+
         Message start = new Message(
                 MessageType.START,
                 roomId,
@@ -297,16 +335,69 @@ public class GameServer {
                 player.getName(),
                 payload
         );
+
         String json = toJson(start);
         for (Player p : room.getPlayers()) {
             p.sendLine(json);
         }
+
+        scheduleRoundEnd(roomId, roundDuration);
+    }
+
+    private void scheduleRoundEnd(int roomId, int roundDuration) {
+        roundScheduler.schedule(() -> endRound(roomId), roundDuration, TimeUnit.SECONDS);
+    }
+
+    private void endRound(int roomId) {
+        GameState room;
+        synchronized (rooms) {
+            room = rooms.get(roomId);
+        }
+        if (room == null) {
+            return;
+        }
+
+        if (room.getMode() == GameMode.GUESS_DRAWING) {
+            String secret = secretWords.get(roomId);
+            if (secret == null) {
+                return;
+            }
+            String payload = "{\"word\":\"" + escape(secret) + "\"}";
+            Message end = new Message(
+                    MessageType.ROUND_UPDATE,
+                    roomId,
+                    0,
+                    "SERVER",
+                    payload
+            );
+            String json = toJson(end);
+            for (Player p : room.getPlayers()) {
+                p.sendLine(json);
+            }
+        } else if (room.getMode() == GameMode.DEAF_PHONE) {
+            sendFinalChains(room);
+        }
+    }
+
+    public String generateWord() {
+        return words.get((int) (Math.random() * words.size()));
     }
 
     private void handleTextSubmit(Player from, Message message) {
         int roomId = message.getRoomId();
         GameState room = rooms.get(roomId);
         if (room == null) {
+            sendError(getWriter(from), "404", "Комната не найдена");
+            return;
+        }
+
+        if (room.getMode() != GameMode.DEAF_PHONE) {
+            sendError(getWriter(from), "400", "Неверный режим для TEXT_SUBMIT");
+            return;
+        }
+
+        if (message.getPayload() == null || message.getPayload().isBlank()) {
+            sendError(getWriter(from), "400", "Пустой текст");
             return;
         }
 
@@ -315,11 +406,17 @@ public class GameServer {
         if (index == -1) {
             return;
         }
+
+        room.getChains()
+                .computeIfAbsent(from.getId(), id -> new ArrayList<>())
+                .add(new ChainStep(message.getPayload()));
+
         int nextIndex = (index + 1) % list.size();
         Player next = list.get(nextIndex);
 
         String payload = "{\"content\":\"" + escape(message.getPayload()) +
                 "\",\"contentType\":\"TEXT\",\"roundNumber\":" + room.getRound() + "}";
+
         Message update = new Message(
                 MessageType.ROUND_UPDATE,
                 roomId,
@@ -327,8 +424,53 @@ public class GameServer {
                 from.getName(),
                 payload
         );
+
         String json = toJson(update);
         next.sendLine(json);
+    }
+
+    private void sendFinalChains(GameState room) {
+        int roomId = room.getRoomId();
+        Map<Integer, List<ChainStep>> chains = room.getChains();
+
+        List<ChainStep> steps = chains.values().iterator().next();
+
+        StringBuilder chainJson = new StringBuilder();
+        chainJson.append("[");
+
+        boolean first = true;
+        for (ChainStep step : steps) {
+            if (!first) {
+                chainJson.append(",");
+            }
+            first = false;
+            if (step.isTextStep()) {
+                chainJson.append("{\"type\":\"TEXT\",\"value\":\"")
+                        .append(escape(step.getText()))
+                        .append("\"}");
+            } else {
+                String enc = java.util.Base64.getEncoder()
+                        .encodeToString(step.getDrawing());
+                chainJson.append("{\"type\":\"DRAW\",\"value\":\"")
+                        .append(enc)
+                        .append("\"}");
+            }
+        }
+        chainJson.append("]");
+
+        String payload = "{\"contentType\":\"FINAL_CHAIN\",\"chain\":" + chainJson + "}";
+
+        Message chainMsg = new Message(
+                MessageType.ROUND_UPDATE,
+                roomId,
+                0,
+                "SERVER",
+                payload
+        );
+        String json = toJson(chainMsg);
+        for (Player p : room.getPlayers()) {
+            p.sendLine(json);
+        }
     }
 
     private void sendError(PrintWriter out, String code, String message) {
@@ -347,36 +489,44 @@ public class GameServer {
         if (line == null || line.isEmpty()) {
             return null;
         }
+
         Message message = new Message();
         try {
             String trimmed = line.trim();
             if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
                 return null;
             }
-            String[] parts = trimmed.substring(1, trimmed.length() - 1).split(",\"");
+
+            String body = trimmed.substring(1, trimmed.length() - 1);
+            String[] parts = body.split(",\"");
+
             for (String part : parts) {
-                String p = part.replace("\"", "");
-                String[] kv = p.split(":", 2);
-                if (kv.length != 2) {
+                int colonIndex = part.indexOf(':');
+                if (colonIndex <= 0) {
                     continue;
                 }
-                String key = kv[0];
-                String value = kv[1];
+
+                String rawKey = part.substring(0, colonIndex);
+                String value = part.substring(colonIndex + 1);
+
+                String key = rawKey.replace("\"", "");
+                String cleaned = stripQuotes(value);
+
                 switch (key) {
                     case "type":
-                        message.setType(MessageType.valueOf(value));
+                        message.setType(MessageType.valueOf(cleaned));
                         break;
                     case "roomId":
-                        message.setRoomId(Integer.parseInt(value));
+                        message.setRoomId(Integer.parseInt(cleaned));
                         break;
                     case "playerId":
-                        message.setPlayerId(Integer.parseInt(value));
+                        message.setPlayerId(Integer.parseInt(cleaned));
                         break;
                     case "playerName":
-                        message.setPlayerName(value);
+                        message.setPlayerName(unescape(cleaned));
                         break;
                     case "payload":
-                        message.setPayload(value);
+                        message.setPayload(unescape(cleaned));
                         break;
                     default:
                         break;
@@ -386,6 +536,30 @@ public class GameServer {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private String stripQuotes(String value) {
+        String v = value.trim();
+        if (v.startsWith("\"") && v.endsWith("\"") && v.length() >= 2) {
+            return v.substring(1, v.length() - 1);
+        }
+        return v;
+    }
+
+    private String escape(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private String unescape(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace("\\\\", "\\")
+                .replace("\\\"", "\"");
     }
 
     private String toJson(Message message) {
@@ -398,12 +572,5 @@ public class GameServer {
         sb.append("\"payload\":\"").append(escape(message.getPayload())).append("\"");
         sb.append("}");
         return sb.toString();
-    }
-
-    private String escape(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

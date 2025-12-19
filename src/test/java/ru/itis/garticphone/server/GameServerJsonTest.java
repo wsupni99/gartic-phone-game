@@ -37,4 +37,45 @@ class GameServerJsonTest {
         assertEquals(original.getPlayerName(), parsed.getPlayerName());
         assertEquals(original.getPayload(), parsed.getPayload());
     }
+
+    @Test
+    void parseMessageShouldReturnNullOnInvalidJson() throws Exception {
+        GameServer server = new GameServer();
+        Method parseMessage = GameServer.class
+                .getDeclaredMethod("parseMessage", String.class);
+        parseMessage.setAccessible(true);
+
+        String invalid = "not a json";
+        Message result = (Message) parseMessage.invoke(server, invalid);
+
+        assertNull(result);
+    }
+
+    @Test
+    void toJsonShouldEscapeQuotesAndBackslashes() throws Exception {
+        GameServer server = new GameServer();
+        Method toJson = GameServer.class
+                .getDeclaredMethod("toJson", Message.class);
+        toJson.setAccessible(true);
+        Method parseMessage = GameServer.class
+                .getDeclaredMethod("parseMessage", String.class);
+        parseMessage.setAccessible(true);
+
+        String trickyName = "Da\"nya\\Test";
+        String trickyPayload = "{ \"k\":\"v\\\\\" }";
+
+        Message original = new Message(
+                MessageType.CHAT,
+                1,
+                10,
+                trickyName,
+                trickyPayload
+        );
+
+        String json = (String) toJson.invoke(server, original);
+        Message parsed = (Message) parseMessage.invoke(server, json);
+
+        assertEquals(trickyName, parsed.getPlayerName());
+        assertEquals(trickyPayload, parsed.getPayload());
+    }
 }
