@@ -22,13 +22,9 @@ class GameServerJsonTest {
                 "hello world"
         );
 
-        Method toJson = GameServer.class.getDeclaredMethod("toJson", Message.class);
-        toJson.setAccessible(true);
-        String json = (String) toJson.invoke(server, original);
+        String json = Message.toJson(original);
 
-        Method parseMessage = GameServer.class.getDeclaredMethod("parseMessage", String.class);
-        parseMessage.setAccessible(true);
-        Message parsed = (Message) parseMessage.invoke(server, json);
+        Message parsed = Message.parse(json);
 
         assertNotNull(parsed);
         assertEquals(original.getType(), parsed.getType());
@@ -39,28 +35,14 @@ class GameServerJsonTest {
     }
 
     @Test
-    void parseMessageShouldReturnNullOnInvalidJson() throws Exception {
-        GameServer server = new GameServer();
-        Method parseMessage = GameServer.class
-                .getDeclaredMethod("parseMessage", String.class);
-        parseMessage.setAccessible(true);
-
-        String invalid = "not a json";
-        Message result = (Message) parseMessage.invoke(server, invalid);
-
-        assertNull(result);
+    void parseMessageShouldReturnNullOnInvalidJson() {
+        assertNull(Message.parse("not a json"));
+        assertNull(Message.parse(""));
+        assertNull(Message.parse(null));
     }
 
     @Test
     void toJsonShouldEscapeQuotesAndBackslashes() throws Exception {
-        GameServer server = new GameServer();
-        Method toJson = GameServer.class
-                .getDeclaredMethod("toJson", Message.class);
-        toJson.setAccessible(true);
-        Method parseMessage = GameServer.class
-                .getDeclaredMethod("parseMessage", String.class);
-        parseMessage.setAccessible(true);
-
         String trickyName = "Da\"nya\\Test";
         String trickyPayload = "{ \"k\":\"v\\\\\" }";
 
@@ -72,8 +54,8 @@ class GameServerJsonTest {
                 trickyPayload
         );
 
-        String json = (String) toJson.invoke(server, original);
-        Message parsed = (Message) parseMessage.invoke(server, json);
+        String json = Message.toJson(original);
+        Message parsed = Message.parse(json);
 
         assertEquals(trickyName, parsed.getPlayerName());
         assertEquals(trickyPayload, parsed.getPayload());

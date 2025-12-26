@@ -9,7 +9,8 @@ public class Player {
     private final int id;
     private String name;
     private final JsonMessageConnection connection;
-    private final PlayerState state;
+    private PlayerState state = PlayerState.IN_LOBBY;
+
 
     public Player(int id, String name, Socket socket) throws IOException {
         this.id = id;
@@ -24,6 +25,35 @@ public class Player {
         this.name = name;
         this.state = PlayerState.CONNECTED;
         this.connection = null;
+    }
+
+    public void sendLine(String json) {
+        try {
+            Message msg = Message.parse(json);
+            connection.send(msg);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void send(Message message) {
+        if (connection != null) {
+            try {
+                connection.send(message);
+            } catch (IOException ignored) {}
+        }
+    }
+
+    public Message receiveLine() throws IOException, ClassNotFoundException {
+        return connection.receive();
+    }
+
+    public void close() throws IOException {
+        connection.close();
+    }
+
+    public Socket getSocket() {
+        return connection != null ? connection.getSocket() : null;
     }
 
     public int getId() {
@@ -42,24 +72,17 @@ public class Player {
         return state;
     }
 
-    public void sendLine(String json) {
-        try {
-            Message msg = Message.parse(json);
-            connection.send(msg);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    public void setState(PlayerState state) {
+        this.state = state;
+    }
+    public boolean isInLobby() {
+        return state == PlayerState.IN_LOBBY;
+    }
+    public boolean isInGame() {
+        return state == PlayerState.IN_GAME;
     }
 
-    public Message receiveLine() throws IOException, ClassNotFoundException {
-        return connection.receive();
-    }
-
-    public void close() throws IOException {
-        connection.close();
-    }
-
-    public Socket getSocket() {
-        return connection != null ? connection.getSocket() : null;
+    public boolean isDisconnected() {
+        return state == PlayerState.DISCONNECTED;
     }
 }

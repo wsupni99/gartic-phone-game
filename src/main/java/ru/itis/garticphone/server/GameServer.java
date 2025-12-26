@@ -1,13 +1,13 @@
 package ru.itis.garticphone.server;
 
 import ru.itis.garticphone.client.Player;
+import ru.itis.garticphone.client.PlayerState;
 import ru.itis.garticphone.common.Message;
 import ru.itis.garticphone.common.MessageType;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -50,25 +50,71 @@ public class GameServer {
         }
     }
 
-    private void loadWords() {
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(
-                        Objects.requireNonNull(
-                                GameServer.class.getResourceAsStream("/words.txt")
-                        ),
-                        StandardCharsets.UTF_8
-                )
-        )) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String trimmed = line.trim();
-                if (!trimmed.isEmpty()) {
-                    words.add(trimmed);
+    private void routeMessage(Player player, Message message) {
+        if (player.isDisconnected()) {
+            System.out.println("Ignoring message from disconnected player: " + player.getId());
+            return;
+        }
+
+        if (message.getType() == null) {
+            sendError(player, "400", "Тип сообщения не задан");
+            return;
+        }
+
+        switch (message.getType()) {
+            case JOIN:
+                if (player.isInLobby() || player.isDisconnected()) {
+                    handleJoin(player, message);
+                } else {
+                    sendError(player, "400", "Нельзя войти в комнату из игры");
                 }
-            }
-        } catch (Exception e) {
-            words.clear();
-            words.addAll(Arrays.asList("кот", "дом", "дерево", "машина", "солнце"));
+                break;
+
+            case LEAVE:
+                handleLeave(player);
+                break;
+
+            case READY:
+                if (player.isInLobby()) {
+                    handleReady(player, message);
+                } else {
+                    sendError(player, "400", "Готовность только в лобби");
+                }
+                break;
+
+            case START:
+                if (player.isInLobby()) {
+                    handleStart(player, message);
+                } else {
+                    sendError(player, "400", "Старт только из лобби");
+                }
+                break;
+
+            case CHAT:
+                if (player.isInLobby() || player.isInGame()) {
+                    handleChat(player, message);
+                } else {
+                    sendError(player, "400", "Чат недоступен");
+                }
+                break;
+
+            case DRAW:
+            case GUESS:
+            case TEXT_SUBMIT:
+                if (player.isInGame()) {
+                    switch (message.getType()) {
+                        case DRAW -> handleDraw(player, message);
+                        case GUESS -> handleGuess(player, message);
+                        case TEXT_SUBMIT -> handleTextSubmit(player, message);
+                    }
+                } else {
+                    sendError(player, "400", "Игровые действия только в игре");
+                }
+                break;
+
+            default:
+                sendError(player, "400", "Неизвестный тип сообщения: " + message.getType());
+                break;
         }
     }
 
@@ -89,62 +135,18 @@ public class GameServer {
         } finally {
             if (player != null) {
                 handleLeave(player);
-                try { player.close(); } catch (IOException ignored) {}
+                try {
+                    player.close();
+                } catch (IOException ignored) {}
                 synchronized (players) {
                     players.remove(player.getSocket());
                 }
             }
         }
     }
-
-
     private int nextPlayerId = 1;
     private int getNextPlayerId() {
         return nextPlayerId++;
-    }
-
-    private void routeMessage(Player player, Message message) {
-        if (message.getType() == null) {
-            sendError(getWriter(player), "400", "Тип сообщения не задан");
-            return;
-        }
-        switch (message.getType()) {
-            case JOIN:
-                handleJoin(player, message);
-                break;
-            case CHAT:
-                handleChat(player, message);
-                break;
-            case DRAW:
-                handleDraw(player, message);
-                break;
-            case GUESS:
-                handleGuess(player, message);
-                break;
-            case READY:
-                handleReady(player, message);
-                break;
-            case START:
-                handleStart(player, message);
-                break;
-            case TEXT_SUBMIT:
-                handleTextSubmit(player, message);
-                break;
-            case LEAVE:
-                handleLeave(player);
-                break;
-            default:
-                sendError(getWriter(player), "400", "Неизвестный тип сообщения: " + message.getType());
-                break;
-        }
-    }
-
-    private PrintWriter getWriter(Player player) {
-        try {
-            return new PrintWriter(player.getSocket().getOutputStream(), true);
-        } catch (IOException e) {
-            return new PrintWriter(System.out, true);
-        }
     }
 
     private void handleJoin(Player player, Message message) {
@@ -167,10 +169,12 @@ public class GameServer {
             }
             gameState.addPlayer(player);
         }
+        player.setState(PlayerState.IN_LOBBY);
         broadcastPlayersUpdate(gameState);
     }
 
     private void handleLeave(Player player) {
+        player.setState(PlayerState.DISCONNECTED);
         synchronized (rooms) {
             for (GameState room : rooms.values()) {
                 if (room.getPlayers().contains(player)) {
@@ -206,7 +210,7 @@ public class GameServer {
         int roomId = message.getRoomId();
         GameState room = rooms.get(roomId);
         if (room == null) {
-            sendError(getWriter(from), "404", "Комната не найдена");
+            sendError(from, "404", "Комната не найдена");
             return;
         }
 
@@ -229,13 +233,13 @@ public class GameServer {
         int roomId = message.getRoomId();
         GameState room = rooms.get(roomId);
         if (room == null) {
-            sendError(getWriter(from), "404", "Комната не найдена");
+            sendError(from, "404", "Комната не найдена");
             return;
         }
 
         if (room.getMode() == GameMode.DEAF_PHONE) {
             if (message.getPayload() == null) {
-                sendError(getWriter(from), "400", "Пустой рисунок");
+                sendError(from, "400", "Пустой рисунок");
                 return;
             }
             room.getChains()
@@ -262,7 +266,7 @@ public class GameServer {
         String guess = message.getPayload();
         String secret = secretWords.get(roomId);
         if (secret == null || guess == null || guess.isBlank()) {
-            sendError(getWriter(from), "400", "Пустое предположение или слово не задано");
+            sendError(from, "400", "Пустое предположение или слово не задано");
             return;
         }
 
@@ -293,7 +297,7 @@ public class GameServer {
         int roomId = message.getRoomId();
         GameState room = rooms.get(roomId);
         if (room == null) {
-            sendError(getWriter(player), "404", "Room not found");
+            sendError(player, "404", "Room not found");
             return;
         }
 
@@ -305,16 +309,16 @@ public class GameServer {
         int roomId = message.getRoomId();
         GameState room = rooms.get(roomId);
         if (room == null) {
-            sendError(getWriter(player), "404", "Room not found");
+            sendError(player, "404", "Room not found");
             return;
         }
 
         if (!room.isHost(player.getId())) {
-            sendError(getWriter(player), "403", "Only host can start game");
+            sendError(player, "403", "Only host can start game");
             return;
         }
         if (!room.allReady()) {
-            sendError(getWriter(player), "412", "Not enough ready players");
+            sendError(player, "412", "Not enough ready players");
             return;
         }
 
@@ -343,6 +347,7 @@ public class GameServer {
 
         for (Player p : room.getPlayers()) {
             p.sendLine(json);
+            p.setState(PlayerState.IN_GAME);
         }
 
         scheduleRoundEnd(roomId, roundDuration);
@@ -391,17 +396,17 @@ public class GameServer {
         int roomId = message.getRoomId();
         GameState room = rooms.get(roomId);
         if (room == null) {
-            sendError(getWriter(from), "404", "Комната не найдена");
+            sendError(from, "404", "Комната не найдена");
             return;
         }
 
         if (room.getMode() != GameMode.DEAF_PHONE) {
-            sendError(getWriter(from), "400", "Неверный режим для TEXT_SUBMIT");
+            sendError(from, "400", "Неверный режим для TEXT_SUBMIT");
             return;
         }
 
         if (message.getPayload() == null || message.getPayload().isBlank()) {
-            sendError(getWriter(from), "400", "Пустой текст");
+            sendError(from, "400", "Пустой текст");
             return;
         }
 
@@ -477,20 +482,17 @@ public class GameServer {
         }
     }
 
-    private void sendError(PrintWriter out, String code, String message) {
-        String payload = "{\"code\":\"" + code + "\",\"message\":\"" + escape(message) + "\"}";
+    private void sendError(Player player, String code, String message) {
         Message error = new Message(
                 MessageType.ERROR,
                 0,
                 0,
                 "SERVER",
-                payload
+                "{\"code\":\"" + Message.escape(code) + "\",\"message\":\"" + Message.escape(message) + "\"}"
         );
-        out.println(toJson(error));
-    }
-
-    private Message parseMessage(String line) {
-        return Message.parse(line);
+        try {
+            player.send(error);
+        } catch (Exception ignored) {}
     }
 
     private String toJson(Message message) {
@@ -499,5 +501,27 @@ public class GameServer {
 
     private String escape(String value) {
         return Message.escape(value);
+    }
+
+    private void loadWords() {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(
+                        Objects.requireNonNull(
+                                GameServer.class.getResourceAsStream("/words.txt")
+                        ),
+                        StandardCharsets.UTF_8
+                )
+        )) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (!trimmed.isEmpty()) {
+                    words.add(trimmed);
+                }
+            }
+        } catch (Exception e) {
+            words.clear();
+            words.addAll(Arrays.asList("кот", "дом", "дерево", "машина", "солнце"));
+        }
     }
 }
