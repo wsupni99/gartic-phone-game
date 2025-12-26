@@ -1,37 +1,29 @@
 package ru.itis.garticphone.client;
 
-import java.io.BufferedReader;
+import ru.itis.garticphone.common.JsonMessageConnection;
+import ru.itis.garticphone.common.Message;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.Socket;
 
 public class Player {
     private final int id;
     private String name;
-    private PlayerState state;
-    private final Socket socket;
-    private final BufferedReader in;
-    private final PrintWriter out;
-    private byte[] lastDrawing;
+    private final JsonMessageConnection connection;
+    private final PlayerState state;
 
     public Player(int id, String name, Socket socket) throws IOException {
         this.id = id;
         this.name = name;
-        this.socket = socket;
         this.state = PlayerState.CONNECTED;
-        this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        this.out = new PrintWriter(socket.getOutputStream(), true);
+        this.connection = new JsonMessageConnection(socket);
     }
 
-    // Для тестов конструктор без сокета
+    // Тестовый конструктор
     public Player(int id, String name) {
         this.id = id;
         this.name = name;
-        this.socket = null;
         this.state = PlayerState.CONNECTED;
-        this.in = null;
-        this.out = null;
+        this.connection = null;
     }
 
     public int getId() {
@@ -50,38 +42,24 @@ public class Player {
         return state;
     }
 
-    public void setState(PlayerState state) {
-        this.state = state;
-    }
-
-    public Socket getSocket() {
-        return socket;
-    }
-
-    public BufferedReader getIn() {
-        return in;
-    }
-
-    public PrintWriter getOut() {
-        return out;
-    }
-
-    public void sendLine(String line) {
-        out.println(line);
-    }
-
-    public void close() {
+    public void sendLine(String json) {
         try {
-            socket.close();
-        } catch (IOException ignored) {
+            Message msg = Message.parse(json);
+            connection.send(msg);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
-    public byte[] getLastDrawing() {
-        return lastDrawing;
+    public Message receiveLine() throws IOException, ClassNotFoundException {
+        return connection.receive();
     }
 
-    public void setLastDrawing(byte[] lastDrawing) {
-        this.lastDrawing = lastDrawing;
+    public void close() throws IOException {
+        connection.close();
+    }
+
+    public Socket getSocket() {
+        return connection != null ? connection.getSocket() : null;
     }
 }

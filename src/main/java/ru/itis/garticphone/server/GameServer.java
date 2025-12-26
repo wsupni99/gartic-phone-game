@@ -16,7 +16,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-// TODO: Управление логикой входа, выбора режима, ожидания, готовности и старта
+
 public class GameServer {
     private static final int PORT = 8080;
     private final Map<Socket, Player> players = new HashMap<>();
@@ -29,6 +29,25 @@ public class GameServer {
 
     public GameServer() {
         loadWords();
+    }
+
+    public static void main(String[] args) {
+        new GameServer().start();
+    }
+
+    public void start() {
+        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+            System.out.println("Game server started on port " + PORT);
+            while (!serverSocket.isClosed()) {
+                Socket clientSocket = serverSocket.accept();
+                executorService.submit(() -> handleClient(clientSocket)); // Пул потоков
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            executorService.shutdownNow();
+            roundScheduler.shutdownNow();
+        }
     }
 
     private void loadWords() {
@@ -53,63 +72,31 @@ public class GameServer {
         }
     }
 
-
-
-    public static void main(String[] args) {
-        new GameServer().start();
-    }
-
-    public void start() {
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            System.out.println("Game server started on port " + PORT);
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                executorService.submit(() -> handleClient(clientSocket));
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            executorService.shutdownNow();
-            roundScheduler.shutdownNow();
-        }
-    }
-
     private void handleClient(Socket socket) {
         Player player = null;
         try {
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-
-            int playerId = getNextPlayerId();
-            player = new Player(playerId, "Player" + playerId, socket);
-
+            player = new Player(getNextPlayerId(), "Player" + getNextPlayerId(), socket);
             synchronized (players) {
                 players.put(socket, player);
             }
 
-            System.out.println("Player connected: " + playerId);
-
-            String line;
-            while ((line = in.readLine()) != null) {
-                Message message = parseMessage(line);
-                if (message == null) {
-                    sendError(out, "400", "Некорректное сообщение");
-                    continue;
-                }
+            Message message;
+            while ((message = player.receiveLine()) != null) {
                 routeMessage(player, message);
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             System.out.println("Client disconnected");
         } finally {
             if (player != null) {
                 handleLeave(player);
-                player.close();
+                try { player.close(); } catch (IOException ignored) {}
                 synchronized (players) {
                     players.remove(player.getSocket());
                 }
             }
         }
     }
+
 
     private int nextPlayerId = 1;
     private int getNextPlayerId() {
@@ -322,7 +309,6 @@ public class GameServer {
             return;
         }
 
-        // КРИТИЧЕСКАЯ ПРОВЕРКА:
         if (!room.isHost(player.getId())) {
             sendError(getWriter(player), "403", "Only host can start game");
             return;
@@ -504,91 +490,14 @@ public class GameServer {
     }
 
     private Message parseMessage(String line) {
-        if (line == null || line.isEmpty()) {
-            return null;
-        }
-
-        Message message = new Message();
-        try {
-            String trimmed = line.trim();
-            if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
-                return null;
-            }
-
-            String body = trimmed.substring(1, trimmed.length() - 1);
-            String[] parts = body.split(",\"");
-
-            for (String part : parts) {
-                int colonIndex = part.indexOf(':');
-                if (colonIndex <= 0) {
-                    continue;
-                }
-
-                String rawKey = part.substring(0, colonIndex);
-                String value = part.substring(colonIndex + 1);
-
-                String key = rawKey.replace("\"", "");
-                String cleaned = stripQuotes(value);
-
-                switch (key) {
-                    case "type":
-                        message.setType(MessageType.valueOf(cleaned));
-                        break;
-                    case "roomId":
-                        message.setRoomId(Integer.parseInt(cleaned));
-                        break;
-                    case "playerId":
-                        message.setPlayerId(Integer.parseInt(cleaned));
-                        break;
-                    case "playerName":
-                        message.setPlayerName(unescape(cleaned));
-                        break;
-                    case "payload":
-                        message.setPayload(unescape(cleaned));
-                        break;
-                    default:
-                        break;
-                }
-            }
-            return message;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private String stripQuotes(String value) {
-        String v = value.trim();
-        if (v.startsWith("\"") && v.endsWith("\"") && v.length() >= 2) {
-            return v.substring(1, v.length() - 1);
-        }
-        return v;
-    }
-
-    private String escape(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
-    }
-
-    private String unescape(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value
-                .replace("\\\\", "\\")
-                .replace("\\\"", "\"");
+        return Message.parse(line);
     }
 
     private String toJson(Message message) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("{");
-        sb.append("\"type\":\"").append(message.getType().name()).append("\",");
-        sb.append("\"roomId\":").append(message.getRoomId()).append(",");
-        sb.append("\"playerId\":").append(message.getPlayerId()).append(",");
-        sb.append("\"playerName\":\"").append(escape(message.getPlayerName())).append("\",");
-        sb.append("\"payload\":\"").append(escape(message.getPayload())).append("\"");
-        sb.append("}");
-        return sb.toString();
+        return Message.toJson(message);
+    }
+
+    private String escape(String value) {
+        return Message.escape(value);
     }
 }
