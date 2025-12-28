@@ -31,6 +31,7 @@ public class ClientConnection implements Closeable {
             } catch (Exception ignored) {
             }
         });
+
         t.setDaemon(true);
         t.start();
     }

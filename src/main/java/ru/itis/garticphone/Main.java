@@ -1,15 +1,5 @@
 package ru.itis.garticphone;
 
-import javafx.stage.Stage;
-import ru.itis.garticphone.common.JsonMessageConnection;
-import ru.itis.garticphone.common.Message;
-import ru.itis.garticphone.common.MessageType;
-import ru.itis.garticphone.ui.GameScreen;
-
-import java.io.IOException;
-import java.net.Socket;
-import java.util.Scanner;
-
 public class Main {
 
 //    public static void main(String[] args) {

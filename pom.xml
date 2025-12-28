@@ -65,7 +65,7 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
-                <mainClass>ru.itis.garticphone.ui.GameScreen</mainClass>
+                <mainClass>ru.itis.garticphone.ui.LoginScreen</mainClass>
                 </configuration>
             </plugin>
     </plugins>
