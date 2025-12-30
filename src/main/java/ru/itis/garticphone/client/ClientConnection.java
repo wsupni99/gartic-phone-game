@@ -1,8 +1,7 @@
 package ru.itis.garticphone.client;
 
-import ru.itis.garticphone.common.JsonMessageConnection;
+import ru.itis.garticphone.common.MessageConnection;
 import ru.itis.garticphone.common.Message;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.Socket;
@@ -10,11 +9,11 @@ import java.util.function.Consumer;
 
 public class ClientConnection implements Closeable {
     private final Socket socket;
-    private final JsonMessageConnection connection;
+    private final MessageConnection connection;
 
     public ClientConnection(String host, int port) throws IOException {
         this.socket = new Socket(host, port);
-        this.connection = new JsonMessageConnection(socket);
+        this.connection = new MessageConnection(socket);
     }
 
     public void send(Message message) throws IOException {

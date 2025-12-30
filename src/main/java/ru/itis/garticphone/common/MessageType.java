@@ -10,7 +10,6 @@ public enum MessageType {
     START,
     TEXT_SUBMIT,
     ROUND_UPDATE,
-    FINAL_CHAIN,
     LEAVE,
     ERROR,
     PLAYER_STATUS

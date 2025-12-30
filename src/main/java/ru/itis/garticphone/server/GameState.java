@@ -1,7 +1,6 @@
 package ru.itis.garticphone.server;
 
 import ru.itis.garticphone.client.Player;
-
 import java.util.*;
 
 public class GameState {
@@ -10,16 +9,13 @@ public class GameState {
     private final List<Player> players;
     private int round;
     private int timerSeconds;
-    private final Map<Integer, List<ChainStep>> chains = new HashMap<>();
     private final Set<Integer> readyPlayers = new HashSet<>();
     private final int minPlayers;
     private int hostId = -1;
-    private String currentStage = "LOBBY";
-
     public GameState(int roomId, GameMode mode) {
         this.roomId = roomId;
         this.mode = mode;
-        this.minPlayers = mode == GameMode.GUESS_DRAWING ? 2 : 4;
+        this.minPlayers = 2;
         this.players = new ArrayList<>();
         this.round = 1;
         this.timerSeconds = 0;
@@ -31,10 +27,6 @@ public class GameState {
 
     public GameMode getMode() {
         return mode;
-    }
-
-    public void setMode(GameMode mode) {
-        this.mode = mode;
     }
 
     public List<Player> getPlayers() {
@@ -55,10 +47,6 @@ public class GameState {
         return round;
     }
 
-    public void nextRound() {
-        round++;
-    }
-
     public void resetRound() {
         round = 1;
     }
@@ -69,20 +57,6 @@ public class GameState {
 
     public void setTimerSeconds(int timerSeconds) {
         this.timerSeconds = timerSeconds;
-    }
-
-    public void decrementTimer() {
-        if (timerSeconds > 0) {
-            timerSeconds--;
-        }
-    }
-
-    public Map<Integer, List<ChainStep>> getChains() {
-        return chains;
-    }
-
-    public void clearChains() {
-        chains.clear();
     }
 
     public void setHost(int playerId) {
@@ -109,13 +83,5 @@ public class GameState {
 
     public Set<Integer> getReadyPlayers() {
         return readyPlayers;
-    }
-
-    public String getCurrentStage() {
-        return currentStage;
-    }
-
-    public void setCurrentStage(String stage) {
-        this.currentStage = stage;
     }
 }

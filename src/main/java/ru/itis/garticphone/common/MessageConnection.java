@@ -3,12 +3,12 @@ package ru.itis.garticphone.common;
 import java.io.*;
 import java.net.Socket;
 
-public class JsonMessageConnection implements Closeable {
+public class MessageConnection implements Closeable {
     private final Socket socket;
     private final BufferedReader reader;
     private final BufferedWriter writer;
 
-    public JsonMessageConnection(Socket socket) throws IOException {
+    public MessageConnection(Socket socket) throws IOException {
         this.socket = socket;
         this.writer = new BufferedWriter(
                 new OutputStreamWriter(socket.getOutputStream())
@@ -30,10 +30,6 @@ public class JsonMessageConnection implements Closeable {
         return Message.parse(line);
     }
 
-    public Socket getSocket() {
-        return socket;
-    }
-
     @Override
     public void close() throws IOException {
         try {
@@ -46,9 +42,4 @@ public class JsonMessageConnection implements Closeable {
         }
         socket.close();
     }
-
-    public boolean isOpen() {
-        return !socket.isClosed() && socket.isConnected();
-    }
-
 }

@@ -1,6 +1,5 @@
 package ru.itis.garticphone.ui;
 
-import com.google.gson.Gson;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
@@ -19,7 +18,6 @@ import java.util.concurrent.ThreadLocalRandom;
 public class LoginScreen extends Application {
 
     AppData appData = new AppData();
-    private final Gson gson = new Gson();
     private GuessDrawingScreen guessScreen;
 
     private Stage stage;
@@ -151,12 +149,7 @@ public class LoginScreen extends Application {
         switch (msg.getType()) {
 
             case ERROR -> Platform.runLater(() -> {
-                try {
-                    Map<?, ?> err = gson.fromJson(msg.getPayload(), Map.class);
-                    error.setText("ошибка: " + err);
-                } catch (Exception ex) {
-                    error.setText("ошибка: " + msg.getPayload());
-                }
+                error.setText("ошибка: " + msg.getPayload());
                 enter.setDisable(false);
                 create.setDisable(false);
             });

@@ -1,6 +1,5 @@
 package ru.itis.garticphone.ui;
 
-import com.google.gson.Gson;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
@@ -16,17 +15,13 @@ import ru.itis.garticphone.common.Message;
 import ru.itis.garticphone.common.MessageType;
 
 import java.io.IOException;
-import java.util.Map;
 
 public class GuessDrawingScreen {
 
     private final AppData appData;
-    private final Gson gson = new Gson();
 
-    // UI root
     private final BorderPane root = new BorderPane();
 
-    // top info
     private final Label roomCodeLbl = new Label();
     private final Label roleLbl = new Label();
     private final Label readyLbl = new Label("Готовы: 0/0");
@@ -37,34 +32,26 @@ public class GuessDrawingScreen {
     private final Button startBtn = new Button("Start");
     private final TextField durationField = new TextField("60");
 
-    // canvas
     private final Canvas canvas = new Canvas(650, 450);
     private final GraphicsContext gc = canvas.getGraphicsContext2D();
     private final Button clearBtn = new Button("Очистить");
 
-    // chat (и догадки тоже здесь)
     private final TextArea chatArea = new TextArea();
     private final TextField chatField = new TextField();
     private final Button chatSendBtn = new Button("Отправить");
 
-    // bottom status
     private final Label statusLbl = new Label("Статус: ...");
 
-    // state
     private boolean inGame = false;
     private boolean iAmReady = false;
 
-    // drawing state
     private double lastX, lastY;
 
-    // timer
     private Timeline timeline;
     private int secondsLeft = 0;
 
-    // чтобы не рисовать "эхо" (сервер может вернуть твой DRAW всем, включая тебя)
     private final boolean ignoreMyEcho = true;
 
-    // payload для DRAW (отрезок линии)
     private static class StrokeDto {
         double x1, y1, x2, y2;
         StrokeDto(double x1, double y1, double x2, double y2) {
@@ -86,23 +73,26 @@ public class GuessDrawingScreen {
         return root;
     }
 
-    // вызывать из startListening(...) для каждого входящего Message
     public void handleIncoming(Message msg) {
         if (msg == null || msg.getType() == null) return;
 
         switch (msg.getType()) {
 
             case PLAYER_STATUS -> Platform.runLater(() -> {
-                // payload: Map<String, Boolean> name -> ready
                 int total = 0;
                 int ready = 0;
-                try {
-                    Map<?, ?> m = gson.fromJson(msg.getPayload(), Map.class);
-                    total = m.size();
-                    for (Object v : m.values()) {
-                        if (Boolean.TRUE.equals(v)) ready++;
+
+                String payload = msg.getPayload();
+                if (payload != null && !payload.isBlank()) {
+                    String[] parts = payload.split(";");
+                    total = parts.length;
+                    for (String part : parts) {
+                        String[] kv = part.split("=", 2);
+                        if (kv.length == 2 && "true".equalsIgnoreCase(kv[1].trim())) {
+                            ready++;
+                        }
                     }
-                } catch (Exception ignored) { }
+                }
 
                 readyLbl.setText("Готовы: " + ready + "/" + total);
             });
@@ -112,43 +102,50 @@ public class GuessDrawingScreen {
                 statusLbl.setText("Статус: Игра началась");
                 clearCanvas();
 
-                // кнопки лобби
                 readyBtn.setDisable(true);
                 startBtn.setDisable(true);
                 durationField.setDisable(true);
 
-                // холст активен только у ведущего
                 canvas.setDisable(!appData.isHost);
                 clearBtn.setDisable(!appData.isHost);
 
-                // слово — только если сервер прислал в START
-                String maybeWord = readStringFromJson(msg.getPayload(), "word");
+                String maybeWord = getField(msg.getPayload(), "word");
                 if (appData.isHost && maybeWord != null && !maybeWord.isBlank()) {
                     wordLbl.setText("Слово: " + maybeWord);
                 } else {
                     wordLbl.setText(appData.isHost ? "Слово: (не пришло)" : "");
                 }
 
-                Integer roundDuration = readIntFromJson(msg.getPayload(), "roundDuration");
-                if (roundDuration != null) startTimer(roundDuration);
+                Integer roundDuration = getIntField(msg.getPayload(), "roundDuration");
+                if (roundDuration != null) {
+                    startTimer(roundDuration);
+                }
             });
 
             case DRAW -> {
-                // рисуем только когда игра стартовала (иначе это просто мусор)
                 if (!inGame) return;
 
-                if (ignoreMyEcho && appData.playerName != null && appData.playerName.equals(msg.getPlayerName())) {
+                if (ignoreMyEcho
+                        && appData.playerName != null
+                        && appData.playerName.equals(msg.getPlayerName())) {
                     return;
                 }
 
-                StrokeDto dto;
+                String payload = msg.getPayload();
+                if (payload == null || payload.isBlank()) return;
+
+                String[] parts = payload.split(";");
+                if (parts.length != 4) return;
+
                 try {
-                    dto = gson.fromJson(msg.getPayload(), StrokeDto.class);
-                } catch (Exception e) {
-                    return;
-                }
+                    double x1 = Double.parseDouble(parts[0]);
+                    double y1 = Double.parseDouble(parts[1]);
+                    double x2 = Double.parseDouble(parts[2]);
+                    double y2 = Double.parseDouble(parts[3]);
 
-                Platform.runLater(() -> gc.strokeLine(dto.x1, dto.y1, dto.x2, dto.y2));
+                    Platform.runLater(() -> gc.strokeLine(x1, y1, x2, y2));
+                } catch (NumberFormatException ignored) {
+                }
             }
 
             case CHAT -> Platform.runLater(() ->
@@ -165,19 +162,21 @@ public class GuessDrawingScreen {
                 stopTimer();
                 chatArea.appendText("SERVER: " + msg.getPayload() + "\n");
                 statusLbl.setText("Статус: Раунд завершён");
-                // после конца раунда можно оставить inGame=true, т.к. сервер может сам начать новый раунд
             });
 
             case ERROR -> Platform.runLater(() -> {
-                statusLbl.setText("Статус: ERROR " + msg.getPayload());
-                chatArea.appendText("SERVER: ERROR " + msg.getPayload() + "\n");
+                String text = getField(msg.getPayload(), "message");
+                if (text == null) {
+                    text = msg.getPayload();
+                }
+                statusLbl.setText("Статус: ERROR " + text);
+                chatArea.appendText("SERVER: ERROR " + text + "\n");
             });
 
-            default -> { }
+            default -> {
+            }
         }
     }
-
-    // ---------------- UI ----------------
 
     private void buildUi() {
         root.setPadding(new Insets(10));
@@ -203,10 +202,8 @@ public class GuessDrawingScreen {
         top.setPadding(new Insets(10));
         root.setTop(top);
 
-        // center
         root.setCenter(new StackPane(canvas));
 
-        // right chat
         chatArea.setEditable(false);
         chatArea.setPrefWidth(260);
         chatField.setPromptText("Чат / догадка");
@@ -220,7 +217,6 @@ public class GuessDrawingScreen {
         VBox.setVgrow(chatArea, Priority.ALWAYS);
         root.setRight(chatBox);
 
-        // bottom
         HBox bottomControls = new HBox(10, clearBtn);
         VBox bottom = new VBox(8, bottomControls, statusLbl);
         bottom.setPadding(new Insets(10));
@@ -233,18 +229,14 @@ public class GuessDrawingScreen {
     }
 
     private void applyInitialRules() {
-        // Пока не пришёл START — игра не началась, рисовать нельзя вообще
         inGame = false;
         canvas.setDisable(true);
         clearBtn.setDisable(true);
 
-        // Ведущий может жать Start, остальные — нет
         startBtn.setDisable(!appData.isHost);
 
         statusLbl.setText("Статус: Лобби. Нажмите Ready, затем ведущий нажмёт Start.");
     }
-
-    // ---------------- Buttons ----------------
 
     private void wireButtons() {
         readyBtn.setOnAction(e -> toggleReady());
@@ -259,7 +251,6 @@ public class GuessDrawingScreen {
     }
 
     private void toggleReady() {
-        // READY разрешён только в лобби, но даже если нажмут поздно — сервер вернёт ERROR [file:79]
         try {
             appData.clientConnection.send(new Message(
                     MessageType.READY,
@@ -294,9 +285,6 @@ public class GuessDrawingScreen {
         }
     }
 
-    // Одна строка ввода:
-    // - всегда отправляем CHAT (можно и в лобби, и в игре) [file:79]
-    // - если игра идёт и ты НЕ ведущий — то же самое отправляем как GUESS [file:79]
     private void sendChatOrGuess() {
         String text = chatField.getText() == null ? "" : chatField.getText().trim();
         if (text.isEmpty()) return;
@@ -329,8 +317,6 @@ public class GuessDrawingScreen {
         }
     }
 
-    // ---------------- Drawing ----------------
-
     private void wireDrawing() {
         canvas.setOnMousePressed(e -> {
             if (!inGame || !appData.isHost) return;
@@ -344,12 +330,9 @@ public class GuessDrawingScreen {
             double x = e.getX();
             double y = e.getY();
 
-            // локально
             gc.strokeLine(lastX, lastY, x, y);
 
-            // всем
-            StrokeDto dto = new StrokeDto(lastX, lastY, x, y);
-            String payload = gson.toJson(dto);
+            String payload = lastX + ";" + lastY + ";" + x + ";" + y;
 
             try {
                 appData.clientConnection.send(new Message(
@@ -359,14 +342,13 @@ public class GuessDrawingScreen {
                         appData.playerName,
                         payload
                 ));
-            } catch (IOException ignored) { }
+            } catch (IOException ignored) {
+            }
 
             lastX = x;
             lastY = y;
         });
     }
-
-    // ---------------- Timer ----------------
 
     private void startTimer(int seconds) {
         stopTimer();
@@ -396,23 +378,25 @@ public class GuessDrawingScreen {
         gc.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
     }
 
-    // ---------------- tiny json helpers ----------------
-
-    private Integer readIntFromJson(String json, String key) {
-        try {
-            Map<?, ?> map = gson.fromJson(json, Map.class);
-            Object v = map.get(key);
-            if (v instanceof Number n) return n.intValue();
-        } catch (Exception ignored) { }
+    private String getField(String payload, String key) {
+        if (payload == null) return null;
+        String[] parts = payload.split(";");
+        for (String part : parts) {
+            String[] kv = part.split("=", 2);
+            if (kv.length == 2 && kv[0].equals(key)) {
+                return kv[1];
+            }
+        }
         return null;
     }
 
-    private String readStringFromJson(String json, String key) {
+    private Integer getIntField(String payload, String key) {
+        String v = getField(payload, key);
+        if (v == null) return null;
         try {
-            Map<?, ?> map = gson.fromJson(json, Map.class);
-            Object v = map.get(key);
-            if (v != null) return String.valueOf(v);
-        } catch (Exception ignored) { }
-        return null;
+            return Integer.parseInt(v.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

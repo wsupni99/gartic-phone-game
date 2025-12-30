@@ -1,6 +1,5 @@
 package ru.itis.garticphone.server;
 
-import com.google.gson.Gson;
 import ru.itis.garticphone.client.Player;
 import ru.itis.garticphone.client.PlayerState;
 import ru.itis.garticphone.common.Message;
@@ -12,16 +11,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-
-import static java.util.Base64.getEncoder;
 
 public class GameService {
     private final Map<Integer, GameState> rooms = new HashMap<>();
     private final Map<Integer, String> secretWords = new HashMap<>();
     private final List<String> words = new ArrayList<>();
     private final ScheduledExecutorService roundScheduler;
-    private final Gson gson = new Gson();
 
     public GameService(ScheduledExecutorService roundScheduler) {
         this.roundScheduler = roundScheduler;
@@ -137,16 +132,20 @@ public class GameService {
     }
 
     private void broadcastPlayersUpdate(GameState room) {
-        Map<String, Boolean> playersStatus = new HashMap<>();
+        StringBuilder sb = new StringBuilder();
         for (Player p : room.getPlayers()) {
-            playersStatus.put(p.getName(), room.getReadyPlayers().contains(p.getId()));
+            if (sb.length() > 0) {
+                sb.append(";");
+            }
+            boolean ready = room.getReadyPlayers().contains(p.getId());
+            sb.append(p.getName()).append("=").append(ready);
         }
         Message msg = new Message(
                 MessageType.PLAYER_STATUS,
                 room.getRoomId(),
                 0,
                 "SERVER",
-                gson.toJson(playersStatus)
+                sb.toString()
         );
         for (Player p : room.getPlayers()) {
             p.send(msg);
@@ -188,17 +187,6 @@ public class GameService {
             }
         }
 
-
-        if (room.getMode() == GameMode.DEAF_PHONE) {
-            if (message.getPayload() == null) {
-                sendError(from, "400", "Empty drawing payload");
-                return;
-            }
-            room.getChains()
-                    .computeIfAbsent(from.getId(), id -> new ArrayList<>())
-                    .add(new ChainStep(message.getPayload().getBytes()));
-        }
-
         Message response = new Message(
                 MessageType.DRAW,
                 roomId,
@@ -221,17 +209,17 @@ public class GameService {
         }
 
         if (secret.equalsIgnoreCase(guess.trim())) {
-            Map<String, Object> payloadData = new HashMap<>();
-            payloadData.put("correctPlayer", from.getName());
-            payloadData.put("word", secret);
-            payloadData.put("score", 1);
+            StringBuilder payload = new StringBuilder();
+            payload.append("correctPlayer=").append(from.getName())
+                    .append(";word=").append(secret)
+                    .append(";score=1");
 
             Message correct = new Message(
                     MessageType.CORRECT,
                     roomId,
                     from.getId(),
                     from.getName(),
-                    gson.toJson(payloadData)
+                    payload.toString()
             );
 
             GameState room = rooms.get(roomId);
@@ -242,10 +230,7 @@ public class GameService {
                 player.send(correct);
             }
 
-            // СБРОС готовности для следующего раунда
             secretWords.remove(roomId);
-
-            // АВТОСТАРТ следующего раунда через 5 сек
             roundScheduler.schedule(() -> autoNextRound(roomId), 5, TimeUnit.SECONDS);
         }
     }
@@ -254,26 +239,19 @@ public class GameService {
         GameState room = rooms.get(roomId);
         if (room == null) return;
 
-        // Генерируем новое слово
         String newWord = generateWord();
         secretWords.put(roomId, newWord);
 
-        // Сброс раунда
         room.resetRound();
 
-        // Payload для START
-        Map<String, Object> payloadData = new HashMap<>();
-        payloadData.put("roundDuration", room.getTimerSeconds());
-        payloadData.put("totalPlayers", room.getPlayers().size());
-        payloadData.put("stage", "DRAW");
+        String base = "roundDuration=" + room.getTimerSeconds()
+                + ";totalPlayers=" + room.getPlayers().size()
+                + ";stage=DRAW";
 
-        // Отправляем START всем
         for (Player p : room.getPlayers()) {
-            Map<String, Object> personal = new HashMap<>(payloadData);
-
-            // слово только ведущему
+            StringBuilder personal = new StringBuilder(base);
             if (room.isHost(p.getId())) {
-                personal.put("word", newWord);
+                personal.append(";word=").append(newWord);
             }
 
             Message nextStart = new Message(
@@ -281,16 +259,13 @@ public class GameService {
                     roomId,
                     0,
                     "SERVER",
-                    gson.toJson(personal)
+                    personal.toString()
             );
             p.send(nextStart);
             p.setState(PlayerState.IN_GAME);
         }
-
-        // Планируем конец нового раунда
         scheduleRoundEnd(roomId, room.getTimerSeconds());
     }
-
 
     private void handleReady(Player player, Message message) {
         int roomId = message.getRoomId();
@@ -332,14 +307,7 @@ public class GameService {
         if (room.getMode() == GameMode.GUESS_DRAWING) {
             String word = generateWord();
             secretWords.put(roomId, word);
-        } else if (room.getMode() == GameMode.DEAF_PHONE) {
-            room.clearChains();
         }
-
-        Map<String, Object> payloadData = new HashMap<>();
-        payloadData.put("roundDuration", roundDuration);
-        payloadData.put("totalPlayers", room.getPlayers().size());
-        payloadData.put("stage", room.getMode() == GameMode.GUESS_DRAWING ? "DRAW" : "TEXT_SUBMIT");
 
         Player host = null;
         for (Player p : room.getPlayers()) {
@@ -348,14 +316,20 @@ public class GameService {
                 break;
             }
         }
-        payloadData.put("hostName", host == null ? "" : host.getName());
+        String hostName = host == null ? "" : host.getName();
+
+        String base = "roundDuration=" + roundDuration
+                + ";totalPlayers=" + room.getPlayers().size()
+                + ";stage=" + (room.getMode() == GameMode.GUESS_DRAWING ? "DRAW" : "TEXT_SUBMIT")
+                + ";hostName=" + hostName;
 
         for (Player p : room.getPlayers()) {
-            Map<String, Object> personal = new HashMap<>(payloadData);
-
-            // слово — только ведущему
+            StringBuilder personal = new StringBuilder(base);
             if (room.getMode() == GameMode.GUESS_DRAWING && room.isHost(p.getId())) {
-                personal.put("word", secretWords.get(roomId));
+                String word = secretWords.get(roomId);
+                if (word != null) {
+                    personal.append(";word=").append(word);
+                }
             }
 
             Message start = new Message(
@@ -363,7 +337,7 @@ public class GameService {
                     roomId,
                     player.getId(),
                     player.getName(),
-                    gson.toJson(personal)
+                    personal.toString()
             );
 
             p.send(start);
@@ -371,7 +345,6 @@ public class GameService {
         }
 
         scheduleRoundEnd(roomId, roundDuration);
-
     }
 
     private void scheduleRoundEnd(int roomId, int roundDuration) {
@@ -392,22 +365,18 @@ public class GameService {
             if (secret == null) {
                 return;
             }
-            Map<String, String> payloadData = new HashMap<>();
-            payloadData.put("word", secret);
+            String payload = "word=" + secret;
             Message end = new Message(
                     MessageType.ROUND_UPDATE,
                     roomId,
                     0,
                     "SERVER",
-                    gson.toJson(payloadData)
+                    payload
             );
             for (Player p : room.getPlayers()) {
                 p.send(end);
             }
-            // АВТОСТАРТ следующего раунда через 5 сек
             roundScheduler.schedule(() -> autoNextRound(roomId), 5, TimeUnit.SECONDS);
-        } else if (room.getMode() == GameMode.DEAF_PHONE) {
-            sendFinalChains(room);
         }
     }
 
@@ -423,11 +392,6 @@ public class GameService {
             return;
         }
 
-        if (room.getMode() != GameMode.DEAF_PHONE) {
-            sendError(from, "400", "Invalid mode for TEXT_SUBMIT");
-            return;
-        }
-
         if (message.getPayload() == null || message.getPayload().isBlank()) {
             sendError(from, "400", "Text payload is empty");
             return;
@@ -438,71 +402,33 @@ public class GameService {
         if (index == -1) {
             return;
         }
-
-        room.getChains()
-                .computeIfAbsent(from.getId(), id -> new ArrayList<>())
-                .add(new ChainStep(message.getPayload()));
-
         int nextIndex = (index + 1) % list.size();
         Player next = list.get(nextIndex);
 
-        Map<String, Object> payloadData = new HashMap<>();
-        payloadData.put("content", message.getPayload());
-        payloadData.put("contentType", "TEXT");
-        payloadData.put("roundNumber", room.getRound());
+        StringBuilder payload = new StringBuilder();
+        payload.append("content=").append(message.getPayload())
+                .append(";contentType=TEXT")
+                .append(";roundNumber=").append(room.getRound());
 
         Message update = new Message(
                 MessageType.ROUND_UPDATE,
                 roomId,
                 from.getId(),
                 from.getName(),
-                gson.toJson(payloadData)
+                payload.toString()
         );
 
         next.send(update);
     }
 
-    private void sendFinalChains(GameState room) {
-        int roomId = room.getRoomId();
-        List<ChainStep> steps = new ArrayList<>(room.getChains().values().iterator().next());
-
-        List<Map<String, Object>> chain = steps.stream()
-                .map(step -> {
-                    Map<String, Object> link = new HashMap<>();
-                    link.put("type", step.isTextStep() ? "TEXT" : "DRAW");
-                    link.put("value", step.isTextStep()
-                            ? step.getText()
-                            : getEncoder().encodeToString(step.getDrawing()));
-                    return link;
-                })
-                .collect(Collectors.toList());
-
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("contentType", "FINAL_CHAIN");
-        payload.put("chain", chain);
-
-        Message chainMsg = new Message(
-                MessageType.FINAL_CHAIN,
-                roomId,
-                0,
-                "SERVER",
-                gson.toJson(payload)
-        );
-        for (Player p : room.getPlayers()) {
-            p.send(chainMsg);
-        }
-    }
-
     private void sendError(Player player, String code, String message) {
-        Map<String, String> errorData = new HashMap<>();
-        errorData.put("code", code);
-        errorData.put("message", message);
+        String payload = "code=" + code + ";message=" + message;
         Message error = new Message(
                 MessageType.ERROR,
                 0,
                 0,
                 "SERVER",
-                gson.toJson(errorData)
+                payload
         );
         try {
             player.send(error);
@@ -528,7 +454,7 @@ public class GameService {
             }
         } catch (Exception e) {
             words.clear();
-            words.addAll(Arrays.asList("cat", "house", "tree", "car", "sun"));
+            words.addAll(Arrays.asList("кот", "дом", "дерево", "машина", "солнце"));
         }
     }
 }

@@ -1,6 +1,6 @@
 package ru.itis.garticphone.client;
 
-import ru.itis.garticphone.common.JsonMessageConnection;
+import ru.itis.garticphone.common.MessageConnection;
 import ru.itis.garticphone.common.Message;
 import java.io.IOException;
 import java.net.Socket;
@@ -8,7 +8,7 @@ import java.net.Socket;
 public class Player {
     private final int id;
     private String name;
-    private final JsonMessageConnection connection;
+    private final MessageConnection connection;
     private PlayerState state;
 
 
@@ -16,24 +16,7 @@ public class Player {
         this.id = id;
         this.name = name;
         this.state = PlayerState.CONNECTED;
-        this.connection = new JsonMessageConnection(socket);
-    }
-
-    // Тестовый конструктор
-    public Player(int id, String name) {
-        this.id = id;
-        this.name = name;
-        this.state = PlayerState.CONNECTED;
-        this.connection = null;
-    }
-
-    public void sendLine(String json) {
-        try {
-            Message msg = Message.parse(json);
-            connection.send(msg);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        this.connection = new MessageConnection(socket);
     }
 
     public void send(Message message) {
@@ -52,10 +35,6 @@ public class Player {
         connection.close();
     }
 
-    public Socket getSocket() {
-        return connection != null ? connection.getSocket() : null;
-    }
-
     public int getId() {
         return id;
     }
@@ -68,16 +47,14 @@ public class Player {
         this.name = name;
     }
 
-    public PlayerState getState() {
-        return state;
-    }
-
     public void setState(PlayerState state) {
         this.state = state;
     }
+
     public boolean isInLobby() {
         return state == PlayerState.IN_LOBBY;
     }
+
     public boolean isInGame() {
         return state == PlayerState.IN_GAME;
     }
