@@ -89,6 +89,16 @@ public class GameService {
                     sendError(player, "400", "Game actions are allowed only in game");
                 }
                 break;
+            case END_GAME:
+                int roomId = message.getRoomId();
+                GameState room = rooms.get(roomId);
+                if (player.isInGame() && room != null && room.isHost(player.getId())) {
+                    handleEndGame(player, message);
+                } else {
+                    sendError(player, "403", "Only host can end game");
+                }
+                break;
+
             default:
                 sendError(player, "400", "Unknown message type: " + message.getType());
                 break;
@@ -404,6 +414,52 @@ public class GameService {
 
         next.send(update);
     }
+    private void handleEndGame(Player host, Message message) {
+        int roomId = message.getRoomId();
+        GameState room = rooms.get(roomId);
+        if (room == null) return;
+
+        roundScheduler.shutdownNow();
+
+        List<Player> playersWithoutHost = new ArrayList<>();
+        for (Player p : room.getPlayers()) {
+            if (!room.isHost(p.getId())) {  // пропускаем хоста
+                playersWithoutHost.add(p);
+            }
+        }
+        playersWithoutHost.sort((a, b) -> Integer.compare(b.getScore(), a.getScore()));
+
+        StringBuilder top = new StringBuilder("ИГРА ЗАВЕРШЕНА!\n");
+        for (int i = 0; i < Math.min(3, playersWithoutHost.size()); i++) {
+            Player p = playersWithoutHost.get(i);
+            top.append(i + 1).append(". ").append(p.getName())
+                    .append(" — ").append(p.getScore()).append(" очков\n");
+        }
+        if (playersWithoutHost.isEmpty()) {
+            top.append("Никто не угадал слова!");
+        }
+        top.append("Выйдите из комнаты, чтобы начать новую игру\n");
+
+        Message finalScores = new Message(
+                MessageType.END_GAME,
+                roomId,
+                0,
+                "SERVER",
+                top.toString()
+        );
+
+        for (Player p : room.getPlayers()) {
+            p.send(finalScores);
+            p.setState(PlayerState.IN_LOBBY);
+        }
+
+        synchronized (rooms) {
+            rooms.remove(roomId);
+            secretWords.remove(roomId);
+        }
+    }
+
+
 
     private void sendError(Player player, String code, String message) {
         String payload = "code=" + code + ";message=" + message;

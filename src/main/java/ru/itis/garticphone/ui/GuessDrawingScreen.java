@@ -47,6 +47,7 @@ public class GuessDrawingScreen {
     private final Button chatSendBtn = new Button("Отправить");
 
     private final Label statusLbl = new Label("Статус: ...");
+    private final Button endGameBtn = new Button("Закончить игру");
 
     // state
     private boolean inGame = false;
@@ -187,6 +188,23 @@ public class GuessDrawingScreen {
                 statusLbl.setText("Статус: Раунд завершён");
             });
 
+            case END_GAME -> Platform.runLater(() -> {
+                stopTimer();
+                inGame = false;
+                chatArea.appendText(msg.getPayload() + "\n");
+                statusLbl.setText("Игра завершена сервером!");
+
+                readyBtn.setDisable(false);
+                readyBtn.setText("Ready");
+                iAmReady = false;
+                startRequested = false;
+                canvas.setDisable(true);
+                clearCanvas();
+                durationField.setDisable(!appData.isHost);
+            });
+
+
+
             case ERROR -> Platform.runLater(() -> {
                 Map<String, String> data = parseKvPayload(msg.getPayload());
                 String text = data.getOrDefault("message", msg.getPayload());
@@ -249,7 +267,7 @@ public class GuessDrawingScreen {
         VBox.setVgrow(chatArea, Priority.ALWAYS);
         root.setRight(chatBox);
 
-        HBox bottomControls = new HBox(10, clearBtn);
+        HBox bottomControls = new HBox(10, clearBtn, endGameBtn);
         VBox bottom = new VBox(8, bottomControls, statusLbl);
         bottom.setPadding(new Insets(10));
         root.setBottom(bottom);
@@ -283,6 +301,9 @@ public class GuessDrawingScreen {
 
         chatSendBtn.setOnAction(e -> sendChatOrGuess());
         chatField.setOnAction(e -> sendChatOrGuess());
+
+        endGameBtn.setOnAction(e -> sendEndGame());
+        endGameBtn.setDisable(!appData.isHost);
     }
 
     private void exitToLogin() {
@@ -377,6 +398,20 @@ public class GuessDrawingScreen {
             } catch (IOException e) {
                 statusLbl.setText("Статус: Ошибка отправки GUESS");
             }
+        }
+    }
+
+    private void sendEndGame() {
+        try {
+            appData.clientConnection.send(new Message(
+                    MessageType.END_GAME,
+                    appData.roomId,
+                    0,
+                    appData.playerName,
+                    ""
+            ));
+        } catch (IOException ex) {
+            statusLbl.setText("Ошибка отправки END_GAME");
         }
     }
 

@@ -12,5 +12,6 @@ public enum MessageType {
     ROUND_UPDATE,
     LEAVE,
     ERROR,
-    PLAYER_STATUS
+    PLAYER_STATUS,
+    END_GAME
 }

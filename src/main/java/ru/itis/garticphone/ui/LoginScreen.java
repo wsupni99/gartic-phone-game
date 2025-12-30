@@ -168,6 +168,12 @@ public class LoginScreen extends Application {
 
                 stage.setScene(new Scene(guessScreen.getRoot(), 1000, 600));
             });
+            case END_GAME -> Platform.runLater(() -> {
+                error.setText("Игра завершена сервером!");
+                enter.setDisable(false);
+                create.setDisable(false);
+            });
+
 
 
             default -> {
