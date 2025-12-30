@@ -16,7 +16,9 @@ import ru.itis.garticphone.common.MessageType;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class GuessDrawingScreen {
 
@@ -81,31 +83,34 @@ public class GuessDrawingScreen {
         switch (msg.getType()) {
 
             case PLAYER_STATUS -> Platform.runLater(() -> {
-                // payload: "name=true;name2=false;..." [server] [file:96]
                 int total = 0;
                 int ready = 0;
-                boolean allReady = false;
 
                 String payload = msg.getPayload();
                 if (payload != null && !payload.isBlank()) {
                     String[] parts = payload.split(";");
                     for (String part : parts) {
                         if (part == null || part.isBlank()) continue;
-                        total++;
+
                         String[] kv = part.split("=", 2);
-                        if (kv.length == 2 && "true".equalsIgnoreCase(kv[1].trim())) {
-                            ready++;
+                        if (kv.length == 2) {
+                            String key = kv[0].trim();
+                            // Считаем ТОЛЬКО игроков (имя=ready), игнорируем score=...
+                            if (!key.equals("score") && !key.isEmpty()) {
+                                total++;
+                                if ("true".equalsIgnoreCase(kv[1].trim())) {
+                                    ready++;
+                                }
+                            }
                         }
                     }
-                    allReady = (total > 0 && ready == total);
                 }
 
                 readyLbl.setText("Готовы: " + ready + "/" + total);
 
-                // если кто-то снял ready — разрешим повтор автостарта
+                boolean allReady = (total > 0 && ready == total);
                 if (!allReady) startRequested = false;
 
-                // авто-старт: host отправляет START, когда все готовы [file:96]
                 if (appData.isHost && !inGame && allReady && !startRequested) {
                     startRequested = true;
                     statusLbl.setText("Статус: Все готовы, запускаем...");
@@ -114,7 +119,6 @@ public class GuessDrawingScreen {
             });
 
             case START -> Platform.runLater(() -> {
-                // payload: "roundDuration=...;totalPlayers=...;stage=...;hostName=...;word=..." [file:96]
                 inGame = true;
                 statusLbl.setText("Статус: Игра началась");
                 clearCanvas();

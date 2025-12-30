@@ -136,7 +136,7 @@ public class GameService {
             if (sb.length() > 0) sb.append(";");
             boolean ready = room.getReadyPlayers().contains(p.getId());
             sb.append(p.getName()).append("=").append(ready)
-                    .append(";score=").append(p.getScore());  // ← добавить
+                    .append(";score=").append(p.getScore());
         }
         Message msg = new Message(
                 MessageType.PLAYER_STATUS,
