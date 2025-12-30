@@ -12,6 +12,7 @@ public class GameState {
     private final Set<Integer> readyPlayers = new HashSet<>();
     private final int minPlayers;
     private int hostId = -1;
+    private long roundToken = 0;
 
     public GameState(int roomId) {
         this.roomId = roomId;
@@ -80,4 +81,14 @@ public class GameState {
     public Set<Integer> getReadyPlayers() {
         return readyPlayers;
     }
+
+
+    public long nextRoundToken() {
+        return ++roundToken;
+    }
+
+    public long getRoundToken() {
+        return roundToken;
+    }
+
 }

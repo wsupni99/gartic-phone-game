@@ -262,6 +262,7 @@ public class GameService {
             }
 
             secretWords.remove(roomId);
+            room.nextRoundToken();
             roundScheduler.schedule(() -> autoNextRound(roomId), 5, TimeUnit.SECONDS);
         }
     }
@@ -295,7 +296,9 @@ public class GameService {
             p.send(nextStart);
             p.setState(PlayerState.IN_GAME);
         }
-        scheduleRoundEnd(roomId, 60);
+        long token = room.nextRoundToken();
+        scheduleRoundEnd(roomId, roundDuration, token);
+
     }
 
     private void handleReady(Player player, Message message) {
@@ -369,27 +372,28 @@ public class GameService {
             p.send(start);
             p.setState(PlayerState.IN_GAME);
         }
-
-        scheduleRoundEnd(roomId, roundDuration);
+        long token = room.nextRoundToken();
+        scheduleRoundEnd(roomId, roundDuration, token);
     }
 
-    private void scheduleRoundEnd(int roomId, int roundDuration) {
-        roundScheduler.schedule(() -> endRound(roomId), roundDuration, TimeUnit.SECONDS);
+    private void scheduleRoundEnd(int roomId, int roundDuration, long token) {
+        roundScheduler.schedule(() -> endRound(roomId, token), roundDuration, TimeUnit.SECONDS);
     }
 
-    private void endRound(int roomId) {
+
+    private void endRound(int roomId, long token) {
         GameState room;
         synchronized (rooms) {
             room = rooms.get(roomId);
         }
-        if (room == null) {
-            return;
-        }
+        if (room == null) return;
+
+        // если раунд уже сменился (был CORRECT и стартанули новый) — игнорируем старую задачу
+        if (token != room.getRoundToken()) return;
 
         String secret = secretWords.get(roomId);
-        if (secret == null) {
-            return;
-        }
+        if (secret == null) return;
+
         String payload = "word=" + secret;
         Message end = new Message(
                 MessageType.ROUND_UPDATE,
@@ -398,11 +402,14 @@ public class GameService {
                 "SERVER",
                 payload
         );
+
         for (Player p : room.getPlayers()) {
             p.send(end);
         }
+
         roundScheduler.schedule(() -> autoNextRound(roomId), 5, TimeUnit.SECONDS);
     }
+
 
     public String generateWord() {
         return words.get((int) (Math.random() * words.size()));

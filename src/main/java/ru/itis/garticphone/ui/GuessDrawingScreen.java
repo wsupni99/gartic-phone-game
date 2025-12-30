@@ -466,20 +466,24 @@ public class GuessDrawingScreen {
     private void startTimer(int seconds) {
         stopTimer();
 
-        secondsLeft = seconds;
+        secondsLeft = Math.max(0, seconds);
         timerLbl.setText("Время: " + secondsLeft);
 
         timeline = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
             secondsLeft--;
-            if (secondsLeft <= 0) {
-                stopTimer();
-                return;
-            }
+            if (secondsLeft < 0) secondsLeft = 0;
+
             timerLbl.setText("Время: " + secondsLeft);
+
+            if (secondsLeft == 0) {
+                stopTimer();
+            }
         }));
-        timeline.setCycleCount(Timeline.INDEFINITE);
-        timeline.play();
+
+        timeline.setCycleCount(secondsLeft); // ровно N тиков
+        timeline.playFromStart();
     }
+
 
 
     private void stopTimer() {
