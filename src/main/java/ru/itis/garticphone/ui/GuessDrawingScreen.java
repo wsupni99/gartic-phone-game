@@ -190,10 +190,20 @@ public class GuessDrawingScreen {
 
             case END_GAME -> Platform.runLater(() -> {
                 stopTimer();
-                inGame = false;
-                chatArea.appendText(msg.getPayload() + "\n");
-                statusLbl.setText("Игра завершена сервером!");
 
+                Map data = parseKvPayload(msg.getPayload());
+                String reason = (String) data.get("reason");
+                String message = (String) data.getOrDefault("message", msg.getPayload());
+
+                chatArea.appendText("SERVER: " + message + "\n");
+                statusLbl.setText(message);
+
+                if ("HOST_LEFT".equalsIgnoreCase(reason)) {
+                    exitToLogin(false);
+                    return;
+                }
+
+                inGame = false;
                 readyBtn.setDisable(false);
                 readyBtn.setText("Ready");
                 iAmReady = false;
@@ -202,6 +212,7 @@ public class GuessDrawingScreen {
                 clearCanvas();
                 durationField.setDisable(!appData.isHost);
             });
+
 
 
 
@@ -293,7 +304,7 @@ public class GuessDrawingScreen {
 
     private void wireButtons() {
         readyBtn.setOnAction(e -> toggleReady());
-        leaveBtn.setOnAction(e -> exitToLogin());
+        leaveBtn.setOnAction(e -> exitToLogin(true));
 
         clearBtn.setOnAction(e -> {
             if (appData.isHost && inGame) clearCanvas();
@@ -306,29 +317,30 @@ public class GuessDrawingScreen {
         endGameBtn.setDisable(!appData.isHost);
     }
 
-    private void exitToLogin() {
+    private void exitToLogin(boolean sendLeave) {
         stopTimer();
 
-        // UI сразу назад
         if (onExitToLogin != null) onExitToLogin.run();
 
-        // сеть закрываем в фоне (чтобы UI не зависал)
         new Thread(() -> {
-            try {
-                appData.clientConnection.send(new Message(
-                        MessageType.LEAVE,
-                        appData.roomId == null ? 0 : appData.roomId,
-                        0,
-                        appData.playerName,
-                        ""
-                ));
-            } catch (Exception ignored) { }
+            if (sendLeave) {
+                try {
+                    appData.clientConnection.send(new Message(
+                            MessageType.LEAVE,
+                            appData.roomId == null ? 0 : appData.roomId,
+                            0,
+                            appData.playerName,
+                            ""
+                    ));
+                } catch (Exception ignored) { }
+            }
 
             try {
                 if (appData.clientConnection != null) appData.clientConnection.close();
             } catch (Exception ignored) { }
         }, "disconnect-thread").start();
     }
+
 
     private void toggleReady() {
         try {

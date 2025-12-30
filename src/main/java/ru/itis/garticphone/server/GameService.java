@@ -130,15 +130,45 @@ public class GameService {
 
     public void handleLeave(Player player) {
         player.setState(PlayerState.DISCONNECTED);
+
         synchronized (rooms) {
-            for (GameState room : rooms.values()) {
-                if (room.getPlayers().contains(player)) {
-                    room.removePlayer(player);
+            Iterator<Map.Entry<Integer, GameState>> it = rooms.entrySet().iterator();
+
+            while (it.hasNext()) {
+                Map.Entry<Integer, GameState> entry = it.next();
+                GameState room = entry.getValue();
+
+                if (!room.getPlayers().contains(player)) continue;
+
+                boolean wasHost = room.isHost(player.getId());
+
+                room.removePlayer(player);
+
+                if (wasHost) {
+                    Message end = new Message(
+                            MessageType.END_GAME,
+                            room.getRoomId(),
+                            0,
+                            "SERVER",
+                            "reason=HOST_LEFT;message=Хост вышел. Комната закрыта."
+                    );
+
+                    List<Player> remaining = new ArrayList<>(room.getPlayers());
+                    for (Player p : remaining) {
+                        p.send(end);
+                        p.setState(PlayerState.CONNECTED);
+                    }
+
+                    it.remove();
+                    secretWords.remove(room.getRoomId());
+                } else {
                     broadcastPlayersUpdate(room);
                 }
+                return;
             }
         }
     }
+
 
     private void broadcastPlayersUpdate(GameState room) {
         StringBuilder sb = new StringBuilder();
