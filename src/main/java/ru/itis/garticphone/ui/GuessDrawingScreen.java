@@ -15,16 +15,15 @@ import ru.itis.garticphone.common.Message;
 import ru.itis.garticphone.common.MessageType;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 public class GuessDrawingScreen {
 
     private final AppData appData;
-<<<<<<< Updated upstream
-=======
-    private final Runnable onExitToLogin; // колбэк в LoginScreen
-    private final Gson gson = new Gson();
->>>>>>> Stashed changes
+    private final Runnable onExitToLogin;
 
+    // UI
     private final BorderPane root = new BorderPane();
 
     private final Label roomCodeLbl = new Label();
@@ -41,33 +40,25 @@ public class GuessDrawingScreen {
     private final GraphicsContext gc = canvas.getGraphicsContext2D();
     private final Button clearBtn = new Button("Очистить");
 
-<<<<<<< Updated upstream
-=======
-    // chat
->>>>>>> Stashed changes
     private final TextArea chatArea = new TextArea();
     private final TextField chatField = new TextField();
     private final Button chatSendBtn = new Button("Отправить");
 
     private final Label statusLbl = new Label("Статус: ...");
 
+    // state
     private boolean inGame = false;
     private boolean iAmReady = false;
-    private boolean startRequested = false; // чтобы не слать START много раз
+    private boolean startRequested = false;
 
+    // drawing
     private double lastX, lastY;
 
+    // timer
     private Timeline timeline;
     private int secondsLeft = 0;
 
     private final boolean ignoreMyEcho = true;
-
-    private static class StrokeDto {
-        double x1, y1, x2, y2;
-        StrokeDto(double x1, double y1, double x2, double y2) {
-            this.x1 = x1; this.y1 = y1; this.x2 = x2; this.y2 = y2;
-        }
-    }
 
     public GuessDrawingScreen(AppData appData, Runnable onExitToLogin) {
         this.appData = appData;
@@ -90,40 +81,31 @@ public class GuessDrawingScreen {
         switch (msg.getType()) {
 
             case PLAYER_STATUS -> Platform.runLater(() -> {
-<<<<<<< Updated upstream
+                // payload: "name=true;name2=false;..." [server] [file:96]
                 int total = 0;
                 int ready = 0;
+                boolean allReady = false;
 
                 String payload = msg.getPayload();
                 if (payload != null && !payload.isBlank()) {
                     String[] parts = payload.split(";");
-                    total = parts.length;
                     for (String part : parts) {
+                        if (part == null || part.isBlank()) continue;
+                        total++;
                         String[] kv = part.split("=", 2);
                         if (kv.length == 2 && "true".equalsIgnoreCase(kv[1].trim())) {
                             ready++;
                         }
                     }
-                }
-=======
-                // payload: Map name -> ready [file:82]
-                int total = 0;
-                int ready = 0;
-                boolean allReady = false;
-
-                try {
-                    Map<?, ?> m = gson.fromJson(msg.getPayload(), Map.class);
-                    total = m.size();
-                    for (Object v : m.values()) {
-                        if (Boolean.TRUE.equals(v)) ready++;
-                    }
                     allReady = (total > 0 && ready == total);
-                } catch (Exception ignored) { }
->>>>>>> Stashed changes
+                }
 
                 readyLbl.setText("Готовы: " + ready + "/" + total);
 
-                // Авто-старт: когда все готовы, host сам отправляет START (кнопки Start нет) [file:82]
+                // если кто-то снял ready — разрешим повтор автостарта
+                if (!allReady) startRequested = false;
+
+                // авто-старт: host отправляет START, когда все готовы [file:96]
                 if (appData.isHost && !inGame && allReady && !startRequested) {
                     startRequested = true;
                     statusLbl.setText("Статус: Все готовы, запускаем...");
@@ -132,52 +114,40 @@ public class GuessDrawingScreen {
             });
 
             case START -> Platform.runLater(() -> {
+                // payload: "roundDuration=...;totalPlayers=...;stage=...;hostName=...;word=..." [file:96]
                 inGame = true;
                 statusLbl.setText("Статус: Игра началась");
                 clearCanvas();
 
                 readyBtn.setDisable(true);
                 durationField.setDisable(true);
-                leaveBtn.setDisable(false);
 
-<<<<<<< Updated upstream
                 canvas.setDisable(!appData.isHost);
                 clearBtn.setDisable(!appData.isHost);
 
-                String maybeWord = getField(msg.getPayload(), "word");
-=======
-                // рисовать может только ведущий (сервер тоже это проверяет) [file:82]
-                canvas.setDisable(!appData.isHost);
-                clearBtn.setDisable(!appData.isHost);
+                Map<String, String> data = parseKvPayload(msg.getPayload());
 
-                // слово — только если сервер прислал его в START ведущему [file:82]
-                String maybeWord = readStringFromJson(msg.getPayload(), "word");
->>>>>>> Stashed changes
+                String maybeWord = data.get("word");
                 if (appData.isHost && maybeWord != null && !maybeWord.isBlank()) {
                     wordLbl.setText("Слово: " + maybeWord);
                 } else {
                     wordLbl.setText(appData.isHost ? "Слово: (не пришло)" : "");
                 }
 
-                Integer roundDuration = getIntField(msg.getPayload(), "roundDuration");
-                if (roundDuration != null) {
-                    startTimer(roundDuration);
-                }
+                Integer roundDuration = parseIntSafe(data.get("roundDuration"));
+                if (roundDuration != null) startTimer(roundDuration);
             });
 
             case DRAW -> {
                 if (!inGame) return;
-<<<<<<< Updated upstream
 
                 if (ignoreMyEcho
                         && appData.playerName != null
                         && appData.playerName.equals(msg.getPlayerName())) {
                     return;
                 }
-=======
-                if (ignoreMyEcho && appData.playerName != null && appData.playerName.equals(msg.getPlayerName())) return;
->>>>>>> Stashed changes
 
+                // payload: "x1;y1;x2;y2"
                 String payload = msg.getPayload();
                 if (payload == null || payload.isBlank()) return;
 
@@ -185,22 +155,12 @@ public class GuessDrawingScreen {
                 if (parts.length != 4) return;
 
                 try {
-<<<<<<< Updated upstream
                     double x1 = Double.parseDouble(parts[0]);
                     double y1 = Double.parseDouble(parts[1]);
                     double x2 = Double.parseDouble(parts[2]);
                     double y2 = Double.parseDouble(parts[3]);
-
                     Platform.runLater(() -> gc.strokeLine(x1, y1, x2, y2));
-                } catch (NumberFormatException ignored) {
-                }
-=======
-                    dto = gson.fromJson(msg.getPayload(), StrokeDto.class);
-                } catch (Exception e) {
-                    return;
-                }
-                Platform.runLater(() -> gc.strokeLine(dto.x1, dto.y1, dto.x2, dto.y2));
->>>>>>> Stashed changes
+                } catch (NumberFormatException ignored) { }
             }
 
             case CHAT -> Platform.runLater(() ->
@@ -209,36 +169,40 @@ public class GuessDrawingScreen {
 
             case CORRECT -> Platform.runLater(() -> {
                 stopTimer();
-                chatArea.appendText("SERVER: " + msg.getPayload() + "\n");
+                // payload: "correctPlayer=...;word=...;score=1" [file:96]
+                Map<String, String> data = parseKvPayload(msg.getPayload());
+                String cp = data.getOrDefault("correctPlayer", "кто-то");
+                String w = data.getOrDefault("word", "?");
+                chatArea.appendText("SERVER: Угадали! " + cp + " (" + w + ")\n");
                 statusLbl.setText("Статус: Правильно! Следующий раунд скоро...");
             });
 
             case ROUND_UPDATE -> Platform.runLater(() -> {
                 stopTimer();
-                chatArea.appendText("SERVER: " + msg.getPayload() + "\n");
+                // payload: "word=..." [file:96]
+                Map<String, String> data = parseKvPayload(msg.getPayload());
+                if (data.containsKey("word")) {
+                    chatArea.appendText("SERVER: Раунд завершён. Слово было: " + data.get("word") + "\n");
+                } else {
+                    chatArea.appendText("SERVER: " + msg.getPayload() + "\n");
+                }
                 statusLbl.setText("Статус: Раунд завершён");
             });
 
             case ERROR -> Platform.runLater(() -> {
-<<<<<<< Updated upstream
-                String text = getField(msg.getPayload(), "message");
-                if (text == null) {
-                    text = msg.getPayload();
-                }
+                // payload: "code=...;message=..." [file:96]
+                Map<String, String> data = parseKvPayload(msg.getPayload());
+                String text = data.getOrDefault("message", msg.getPayload());
                 statusLbl.setText("Статус: ERROR " + text);
                 chatArea.appendText("SERVER: ERROR " + text + "\n");
-=======
-                statusLbl.setText("Статус: ERROR " + msg.getPayload());
-                chatArea.appendText("SERVER: ERROR " + msg.getPayload() + "\n");
-                // если автостарт не прошёл (например, сервер ответил 412/403) — разрешим повтор
                 startRequested = false;
->>>>>>> Stashed changes
             });
 
-            default -> {
-            }
+            default -> { }
         }
     }
+
+    // ---------------- UI ----------------
 
     private void buildUi() {
         root.setPadding(new Insets(10));
@@ -249,7 +213,7 @@ public class GuessDrawingScreen {
         wordLbl.setText(appData.isHost ? "Слово: (ждём старт)" : "");
         wordLbl.setVisible(appData.isHost);
         wordLbl.setManaged(appData.isHost);
-        wordLbl.setStyle("-fx-font-size: 22px; -fx-font-weight: bold;"); // слово крупнее
+        wordLbl.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;"); // крупнее слово
 
         durationField.setPrefWidth(60);
         durationField.setDisable(!appData.isHost);
@@ -305,19 +269,15 @@ public class GuessDrawingScreen {
 
         canvas.setDisable(true);
         clearBtn.setDisable(true);
-
-<<<<<<< Updated upstream
-        startBtn.setDisable(!appData.isHost);
-=======
         leaveBtn.setDisable(false);
->>>>>>> Stashed changes
 
         statusLbl.setText("Статус: Лобби. Все нажимают Ready — игра стартует автоматически.");
     }
 
+    // ---------------- Buttons ----------------
+
     private void wireButtons() {
         readyBtn.setOnAction(e -> toggleReady());
-
         leaveBtn.setOnAction(e -> exitToLogin());
 
         clearBtn.setOnAction(e -> {
@@ -331,10 +291,10 @@ public class GuessDrawingScreen {
     private void exitToLogin() {
         stopTimer();
 
-        // UI переключаем сразу
+        // UI сразу назад
         if (onExitToLogin != null) onExitToLogin.run();
 
-        // сеть закрываем в фоне
+        // сеть закрываем в фоне (чтобы UI не зависал)
         new Thread(() -> {
             try {
                 appData.clientConnection.send(new Message(
@@ -352,7 +312,6 @@ public class GuessDrawingScreen {
         }, "disconnect-thread").start();
     }
 
-
     private void toggleReady() {
         try {
             appData.clientConnection.send(new Message(
@@ -365,7 +324,6 @@ public class GuessDrawingScreen {
             iAmReady = !iAmReady;
             readyBtn.setText(iAmReady ? "Unready" : "Ready");
 
-            // если host снял ready — позволим автостарту снова
             if (appData.isHost && !iAmReady) startRequested = false;
 
         } catch (IOException e) {
@@ -373,7 +331,6 @@ public class GuessDrawingScreen {
         }
     }
 
-    // Авто START (только host). Сервер разрешает START только из лобби и только host. [file:82]
     private void sendStartAuto() {
         if (!appData.isHost) return;
 
@@ -394,10 +351,6 @@ public class GuessDrawingScreen {
         }
     }
 
-<<<<<<< Updated upstream
-=======
-    // CHAT всегда; GUESS только когда игра идёт и ты не ведущий [file:82]
->>>>>>> Stashed changes
     private void sendChatOrGuess() {
         String text = chatField.getText() == null ? "" : chatField.getText().trim();
         if (text.isEmpty()) return;
@@ -430,6 +383,8 @@ public class GuessDrawingScreen {
         }
     }
 
+    // ---------------- Drawing ----------------
+
     private void wireDrawing() {
         canvas.setOnMousePressed(e -> {
             if (!inGame || !appData.isHost) return;
@@ -445,12 +400,7 @@ public class GuessDrawingScreen {
 
             gc.strokeLine(lastX, lastY, x, y);
 
-<<<<<<< Updated upstream
             String payload = lastX + ";" + lastY + ";" + x + ";" + y;
-=======
-            StrokeDto dto = new StrokeDto(lastX, lastY, x, y);
-            String payload = gson.toJson(dto);
->>>>>>> Stashed changes
 
             try {
                 appData.clientConnection.send(new Message(
@@ -460,13 +410,14 @@ public class GuessDrawingScreen {
                         appData.playerName,
                         payload
                 ));
-            } catch (IOException ignored) {
-            }
+            } catch (IOException ignored) { }
 
             lastX = x;
             lastY = y;
         });
     }
+
+    // ---------------- Timer ----------------
 
     private void startTimer(int seconds) {
         stopTimer();
@@ -496,25 +447,30 @@ public class GuessDrawingScreen {
         gc.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
     }
 
-    private String getField(String payload, String key) {
-        if (payload == null) return null;
-        String[] parts = payload.split(";");
-        for (String part : parts) {
-            String[] kv = part.split("=", 2);
-            if (kv.length == 2 && kv[0].equals(key)) {
-                return kv[1];
-            }
-        }
-        return null;
-    }
+    // ---------------- helpers ----------------
 
-    private Integer getIntField(String payload, String key) {
-        String v = getField(payload, key);
-        if (v == null) return null;
+    private static Integer parseIntSafe(String s) {
+        if (s == null) return null;
         try {
-            return Integer.parseInt(v.trim());
-        } catch (NumberFormatException e) {
+            return Integer.parseInt(s.trim());
+        } catch (Exception e) {
             return null;
         }
+    }
+
+    // Парсер для payload вида "k=v;k2=v2" (для START/ERROR/CORRECT/ROUND_UPDATE) [file:96]
+    private static Map<String, String> parseKvPayload(String payload) {
+        Map<String, String> map = new HashMap<>();
+        if (payload == null || payload.isBlank()) return map;
+
+        String[] parts = payload.split(";");
+        for (String part : parts) {
+            if (part == null || part.isBlank()) continue;
+            String[] kv = part.split("=", 2);
+            if (kv.length == 2) {
+                map.put(kv[0].trim(), kv[1]);
+            }
+        }
+        return map;
     }
 }
