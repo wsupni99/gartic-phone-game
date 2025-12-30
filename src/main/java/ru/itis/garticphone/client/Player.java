@@ -10,6 +10,7 @@ public class Player {
     private String name;
     private final MessageConnection connection;
     private PlayerState state;
+    private int score = 0;
 
 
     public Player(int id, String name, Socket socket) throws IOException {
@@ -65,5 +66,13 @@ public class Player {
 
     public boolean isConnected() {
         return state == PlayerState.CONNECTED;
+    }
+
+    public int getScore() {
+        return score;
+    }
+
+    public void addScore(int points) {
+        score += points;
     }
 }
