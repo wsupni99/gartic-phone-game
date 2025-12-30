@@ -7,4 +7,5 @@ public class AppData {
     public ClientConnection clientConnection;
     public String playerName;
     public Integer roomId;
+    public boolean isHost;
 }

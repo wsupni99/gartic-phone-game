@@ -20,6 +20,7 @@ public class LoginScreen extends Application {
 
     AppData appData = new AppData();
     private final Gson gson = new Gson();
+    private GuessDrawingScreen guessScreen;
 
     private Stage stage;
     private VBox layout = new VBox(10);
@@ -91,6 +92,7 @@ public class LoginScreen extends Application {
         // при входе ставим режим по умолчанию
         String mode = "GUESS_DRAWING";
 
+        appData.isHost = false;
         connect(playerName, roomId, mode);
     }
 
@@ -106,6 +108,7 @@ public class LoginScreen extends Application {
 
         String mode = rbGuess.isSelected() ? "GUESS_DRAWING" : "DEAF_PHONE";
 
+        appData.isHost = true;
         connect(playerName, roomId, mode);
     }
 
@@ -117,7 +120,11 @@ public class LoginScreen extends Application {
             appData.roomId = roomId;
 
             appData.clientConnection.startListening(msg -> {
-                handleServerMessage(msg);
+                    if (guessScreen != null) {
+                        guessScreen.handleIncoming(msg);
+                    } else {
+                        handleServerMessage(msg);
+                    }
             });
 
 
@@ -155,11 +162,9 @@ public class LoginScreen extends Application {
             });
 
             case PLAYER_STATUS -> Platform.runLater(() -> {
-                // Сервер прислал PLAYER_STATUS => JOIN прошёл, ты в комнате (лобби) [file:57]
-                error.setText("вошли в комнату " + appData.roomId);
+                    guessScreen = new GuessDrawingScreen(appData);
+                    stage.setScene(new Scene(guessScreen.getRoot(), 1000, 600));
 
-                // Тут потом сделаешь переход на другую сцену:
-                // stage.setScene(new Scene(new LobbyScreen(stage, appData).getRoot(), 800, 600));
             });
 
             default -> {

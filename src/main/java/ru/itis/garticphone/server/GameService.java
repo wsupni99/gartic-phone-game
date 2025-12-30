@@ -181,6 +181,13 @@ public class GameService {
             sendError(from, "404", "Room not found");
             return;
         }
+        if (room.getMode() == GameMode.GUESS_DRAWING) {
+            if (!room.isHost(from.getId())) {
+                sendError(from, "403", "Only host can draw in GUESS_DRAWING");
+                return;
+            }
+        }
+
 
         if (room.getMode() == GameMode.DEAF_PHONE) {
             if (message.getPayload() == null) {
@@ -287,20 +294,37 @@ public class GameService {
         payloadData.put("totalPlayers", room.getPlayers().size());
         payloadData.put("stage", room.getMode() == GameMode.GUESS_DRAWING ? "DRAW" : "TEXT_SUBMIT");
 
-        Message start = new Message(
-                MessageType.START,
-                roomId,
-                player.getId(),
-                player.getName(),
-                gson.toJson(payloadData)
-        );
+        Player host = null;
+        for (Player p : room.getPlayers()) {
+            if (room.isHost(p.getId())) {
+                host = p;
+                break;
+            }
+        }
+        payloadData.put("hostName", host == null ? "" : host.getName());
 
         for (Player p : room.getPlayers()) {
+            Map<String, Object> personal = new HashMap<>(payloadData);
+
+            // слово — только ведущему
+            if (room.getMode() == GameMode.GUESS_DRAWING && room.isHost(p.getId())) {
+                personal.put("word", secretWords.get(roomId));
+            }
+
+            Message start = new Message(
+                    MessageType.START,
+                    roomId,
+                    player.getId(),
+                    player.getName(),
+                    gson.toJson(personal)
+            );
+
             p.send(start);
             p.setState(PlayerState.IN_GAME);
         }
 
         scheduleRoundEnd(roomId, roundDuration);
+
     }
 
     private void scheduleRoundEnd(int roomId, int roundDuration) {
