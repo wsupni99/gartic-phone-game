@@ -32,14 +32,18 @@ public class MessageConnection implements Closeable {
 
     @Override
     public void close() throws IOException {
-        try {
-            reader.close();
-        } catch (IOException ignored) {
-        }
-        try {
-            writer.close();
-        } catch (IOException ignored) {
-        }
-        socket.close();
+        try { socket.close(); } catch (IOException ignored) {}
+
+        try { reader.close(); } catch (IOException ignored) {}
+        try { writer.close(); } catch (IOException ignored) {}
     }
+<<<<<<< Updated upstream:src/main/java/ru/itis/garticphone/common/MessageConnection.java
+=======
+
+
+    public boolean isOpen() {
+        return !socket.isClosed() && socket.isConnected();
+    }
+
+>>>>>>> Stashed changes:src/main/java/ru/itis/garticphone/common/JsonMessageConnection.java
 }
