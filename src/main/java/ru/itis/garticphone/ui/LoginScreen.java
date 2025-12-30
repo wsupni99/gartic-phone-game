@@ -155,10 +155,20 @@ public class LoginScreen extends Application {
             });
 
             case PLAYER_STATUS -> Platform.runLater(() -> {
-                    guessScreen = new GuessDrawingScreen(appData);
-                    stage.setScene(new Scene(guessScreen.getRoot(), 1000, 600));
+                guessScreen = new GuessDrawingScreen(appData, () -> {
+                    // вернуться на login
+                    guessScreen = null;
+                    stage.setScene(lobbyScene);
 
+                    // чтобы можно было подключаться заново
+                    enter.setDisable(false);
+                    create.setDisable(false);
+                    error.setText("");
+                });
+
+                stage.setScene(new Scene(guessScreen.getRoot(), 1000, 600));
             });
+
 
             default -> {
                 // пока игнорируем
