@@ -23,7 +23,7 @@ public class LoginScreen extends Application {
     private GuessDrawingScreen guessScreen;
 
     private Stage stage;
-    private VBox layout = new VBox(10);
+    private VBox    layout = new VBox(10);
     private Scene lobbyScene;
 
     private Label lobbyTitle = new Label("Gartic Phone");

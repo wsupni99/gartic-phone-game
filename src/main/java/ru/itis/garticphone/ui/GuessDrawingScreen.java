@@ -158,7 +158,7 @@ public class GuessDrawingScreen {
             case CORRECT -> Platform.runLater(() -> {
                 stopTimer();
                 chatArea.appendText("SERVER: " + msg.getPayload() + "\n");
-                statusLbl.setText("Статус: Кто-то угадал");
+                statusLbl.setText("Статус: Правильно! Следующий раунд начнётся через 5 сек...");
             });
 
             case ROUND_UPDATE -> Platform.runLater(() -> {

@@ -241,9 +241,56 @@ public class GameService {
             for (Player player : room.getPlayers()) {
                 player.send(correct);
             }
-            endRound(roomId);
+
+            // СБРОС готовности для следующего раунда
+            secretWords.remove(roomId);
+
+            // АВТОСТАРТ следующего раунда через 5 сек
+            roundScheduler.schedule(() -> autoNextRound(roomId), 5, TimeUnit.SECONDS);
         }
     }
+
+    private void autoNextRound(int roomId) {
+        GameState room = rooms.get(roomId);
+        if (room == null) return;
+
+        // Генерируем новое слово
+        String newWord = generateWord();
+        secretWords.put(roomId, newWord);
+
+        // Сброс раунда
+        room.resetRound();
+
+        // Payload для START
+        Map<String, Object> payloadData = new HashMap<>();
+        payloadData.put("roundDuration", room.getTimerSeconds());
+        payloadData.put("totalPlayers", room.getPlayers().size());
+        payloadData.put("stage", "DRAW");
+
+        // Отправляем START всем
+        for (Player p : room.getPlayers()) {
+            Map<String, Object> personal = new HashMap<>(payloadData);
+
+            // слово только ведущему
+            if (room.isHost(p.getId())) {
+                personal.put("word", newWord);
+            }
+
+            Message nextStart = new Message(
+                    MessageType.START,
+                    roomId,
+                    0,
+                    "SERVER",
+                    gson.toJson(personal)
+            );
+            p.send(nextStart);
+            p.setState(PlayerState.IN_GAME);
+        }
+
+        // Планируем конец нового раунда
+        scheduleRoundEnd(roomId, room.getTimerSeconds());
+    }
+
 
     private void handleReady(Player player, Message message) {
         int roomId = message.getRoomId();
@@ -357,6 +404,8 @@ public class GameService {
             for (Player p : room.getPlayers()) {
                 p.send(end);
             }
+            // АВТОСТАРТ следующего раунда через 5 сек
+            roundScheduler.schedule(() -> autoNextRound(roomId), 5, TimeUnit.SECONDS);
         } else if (room.getMode() == GameMode.DEAF_PHONE) {
             sendFinalChains(room);
         }
