@@ -107,8 +107,7 @@ public class GameService {
         synchronized (rooms) {
             gameState = rooms.get(roomId);
             if (gameState == null) {
-                GameMode mode = GameMode.valueOf(message.getPayload());
-                gameState = new GameState(roomId, mode);
+                gameState = new GameState(roomId);
                 rooms.put(roomId, gameState);
                 gameState.setHost(player.getId());
             }
@@ -134,11 +133,10 @@ public class GameService {
     private void broadcastPlayersUpdate(GameState room) {
         StringBuilder sb = new StringBuilder();
         for (Player p : room.getPlayers()) {
-            if (sb.length() > 0) {
-                sb.append(";");
-            }
+            if (sb.length() > 0) sb.append(";");
             boolean ready = room.getReadyPlayers().contains(p.getId());
-            sb.append(p.getName()).append("=").append(ready);
+            sb.append(p.getName()).append("=").append(ready)
+                    .append(";score=").append(p.getScore());  // ← добавить
         }
         Message msg = new Message(
                 MessageType.PLAYER_STATUS,
@@ -180,12 +178,6 @@ public class GameService {
             sendError(from, "404", "Room not found");
             return;
         }
-        if (room.getMode() == GameMode.GUESS_DRAWING) {
-            if (!room.isHost(from.getId())) {
-                sendError(from, "403", "Only host can draw in GUESS_DRAWING");
-                return;
-            }
-        }
 
         Message response = new Message(
                 MessageType.DRAW,
@@ -209,6 +201,8 @@ public class GameService {
         }
 
         if (secret.equalsIgnoreCase(guess.trim())) {
+            from.addScore(1);
+
             StringBuilder payload = new StringBuilder();
             payload.append("correctPlayer=").append(from.getName())
                     .append(";word=").append(secret)
@@ -304,10 +298,8 @@ public class GameService {
         room.setTimerSeconds(roundDuration);
         room.resetRound();
 
-        if (room.getMode() == GameMode.GUESS_DRAWING) {
-            String word = generateWord();
-            secretWords.put(roomId, word);
-        }
+        String word = generateWord();
+        secretWords.put(roomId, word);
 
         Player host = null;
         for (Player p : room.getPlayers()) {
@@ -320,16 +312,13 @@ public class GameService {
 
         String base = "roundDuration=" + roundDuration
                 + ";totalPlayers=" + room.getPlayers().size()
-                + ";stage=" + (room.getMode() == GameMode.GUESS_DRAWING ? "DRAW" : "TEXT_SUBMIT")
+                + ";stage=DRAW"
                 + ";hostName=" + hostName;
 
         for (Player p : room.getPlayers()) {
             StringBuilder personal = new StringBuilder(base);
-            if (room.getMode() == GameMode.GUESS_DRAWING && room.isHost(p.getId())) {
-                String word = secretWords.get(roomId);
-                if (word != null) {
-                    personal.append(";word=").append(word);
-                }
+            if (room.isHost(p.getId())) {
+                personal.append(";word=").append(secretWords.get(roomId));
             }
 
             Message start = new Message(
@@ -360,24 +349,22 @@ public class GameService {
             return;
         }
 
-        if (room.getMode() == GameMode.GUESS_DRAWING) {
-            String secret = secretWords.get(roomId);
-            if (secret == null) {
-                return;
-            }
-            String payload = "word=" + secret;
-            Message end = new Message(
-                    MessageType.ROUND_UPDATE,
-                    roomId,
-                    0,
-                    "SERVER",
-                    payload
-            );
-            for (Player p : room.getPlayers()) {
-                p.send(end);
-            }
-            roundScheduler.schedule(() -> autoNextRound(roomId), 5, TimeUnit.SECONDS);
+        String secret = secretWords.get(roomId);
+        if (secret == null) {
+            return;
         }
+        String payload = "word=" + secret;
+        Message end = new Message(
+                MessageType.ROUND_UPDATE,
+                roomId,
+                0,
+                "SERVER",
+                payload
+        );
+        for (Player p : room.getPlayers()) {
+            p.send(end);
+        }
+        roundScheduler.schedule(() -> autoNextRound(roomId), 5, TimeUnit.SECONDS);
     }
 
     public String generateWord() {

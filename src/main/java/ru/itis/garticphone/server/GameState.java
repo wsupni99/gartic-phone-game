@@ -1,20 +1,20 @@
 package ru.itis.garticphone.server;
 
 import ru.itis.garticphone.client.Player;
+
 import java.util.*;
 
 public class GameState {
     private final int roomId;
-    private GameMode mode;
     private final List<Player> players;
     private int round;
     private int timerSeconds;
     private final Set<Integer> readyPlayers = new HashSet<>();
     private final int minPlayers;
     private int hostId = -1;
-    public GameState(int roomId, GameMode mode) {
+
+    public GameState(int roomId) {
         this.roomId = roomId;
-        this.mode = mode;
         this.minPlayers = 2;
         this.players = new ArrayList<>();
         this.round = 1;
@@ -23,10 +23,6 @@ public class GameState {
 
     public int getRoomId() {
         return roomId;
-    }
-
-    public GameMode getMode() {
-        return mode;
     }
 
     public List<Player> getPlayers() {
