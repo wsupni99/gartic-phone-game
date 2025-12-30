@@ -275,10 +275,10 @@ public class GameService {
 
         room.resetRound();
 
-        String base = "roundDuration=" + room.getTimerSeconds()
+        int roundDuration = room.getTimerSeconds();
+        String base = "roundDuration=" + roundDuration
                 + ";totalPlayers=" + room.getPlayers().size()
                 + ";stage=DRAW";
-
         for (Player p : room.getPlayers()) {
             StringBuilder personal = new StringBuilder(base);
             if (room.isHost(p.getId())) {
@@ -295,7 +295,7 @@ public class GameService {
             p.send(nextStart);
             p.setState(PlayerState.IN_GAME);
         }
-        scheduleRoundEnd(roomId, room.getTimerSeconds());
+        scheduleRoundEnd(roomId, 60);
     }
 
     private void handleReady(Player player, Message message) {

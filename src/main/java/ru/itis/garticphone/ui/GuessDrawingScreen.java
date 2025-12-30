@@ -239,7 +239,7 @@ public class GuessDrawingScreen {
         wordLbl.setText(appData.isHost ? "Слово: (ждём старт)" : "");
         wordLbl.setVisible(appData.isHost);
         wordLbl.setManaged(appData.isHost);
-        wordLbl.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;"); // крупнее слово
+        wordLbl.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
 
         durationField.setPrefWidth(60);
         durationField.setDisable(!appData.isHost);
@@ -266,7 +266,7 @@ public class GuessDrawingScreen {
         root.setCenter(new StackPane(canvas));
 
         chatArea.setEditable(false);
-        chatArea.setPrefWidth(260);
+        chatArea.setPrefWidth(300);
         chatField.setPromptText("Чат / догадка");
 
         VBox chatBox = new VBox(8,
@@ -465,20 +465,22 @@ public class GuessDrawingScreen {
 
     private void startTimer(int seconds) {
         stopTimer();
-        secondsLeft = Math.max(0, seconds);
+
+        secondsLeft = seconds;
         timerLbl.setText("Время: " + secondsLeft);
 
         timeline = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
             secondsLeft--;
-            if (secondsLeft < 0) {
+            if (secondsLeft <= 0) {
                 stopTimer();
                 return;
             }
             timerLbl.setText("Время: " + secondsLeft);
         }));
-        timeline.setCycleCount(secondsLeft + 1);
-        timeline.playFromStart();
+        timeline.setCycleCount(Timeline.INDEFINITE);
+        timeline.play();
     }
+
 
     private void stopTimer() {
         if (timeline != null) {
