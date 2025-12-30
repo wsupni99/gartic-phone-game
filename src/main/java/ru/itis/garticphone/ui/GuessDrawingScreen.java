@@ -95,7 +95,6 @@ public class GuessDrawingScreen {
                         String[] kv = part.split("=", 2);
                         if (kv.length == 2) {
                             String key = kv[0].trim();
-                            // Считаем ТОЛЬКО игроков (имя=ready), игнорируем score=...
                             if (!key.equals("score") && !key.isEmpty()) {
                                 total++;
                                 if ("true".equalsIgnoreCase(kv[1].trim())) {
@@ -173,17 +172,12 @@ public class GuessDrawingScreen {
 
             case CORRECT -> Platform.runLater(() -> {
                 stopTimer();
-                // payload: "correctPlayer=...;word=...;score=1" [file:96]
-                Map<String, String> data = parseKvPayload(msg.getPayload());
-                String cp = data.getOrDefault("correctPlayer", "кто-то");
-                String w = data.getOrDefault("word", "?");
-                chatArea.appendText("SERVER: Угадали! " + cp + " (" + w + ")\n");
-                statusLbl.setText("Статус: Правильно! Следующий раунд скоро...");
+                chatArea.appendText("SERVER: " + msg.getPayload() + "\n");
+                statusLbl.setText("Статус: Правильно! Следующий раунд через 5 сек...");
             });
 
             case ROUND_UPDATE -> Platform.runLater(() -> {
                 stopTimer();
-                // payload: "word=..." [file:96]
                 Map<String, String> data = parseKvPayload(msg.getPayload());
                 if (data.containsKey("word")) {
                     chatArea.appendText("SERVER: Раунд завершён. Слово было: " + data.get("word") + "\n");
@@ -194,7 +188,6 @@ public class GuessDrawingScreen {
             });
 
             case ERROR -> Platform.runLater(() -> {
-                // payload: "code=...;message=..." [file:96]
                 Map<String, String> data = parseKvPayload(msg.getPayload());
                 String text = data.getOrDefault("message", msg.getPayload());
                 statusLbl.setText("Статус: ERROR " + text);

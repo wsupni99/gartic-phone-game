@@ -202,18 +202,15 @@ public class GameService {
 
         if (secret.equalsIgnoreCase(guess.trim())) {
             from.addScore(1);
-
-            StringBuilder payload = new StringBuilder();
-            payload.append("correctPlayer=").append(from.getName())
-                    .append(";word=").append(secret)
-                    .append(";score=1");
+            String niceMessage = String.format("%s угадал слово \"%s\"! +1 очко",
+                    from.getName(), secret);
 
             Message correct = new Message(
                     MessageType.CORRECT,
                     roomId,
                     from.getId(),
                     from.getName(),
-                    payload.toString()
+                    niceMessage
             );
 
             GameState room = rooms.get(roomId);
