@@ -25,7 +25,6 @@ public class GuessDrawingScreen {
     private final AppData appData;
     private final Runnable onExitToLogin;
 
-    // UI
     private final BorderPane root = new BorderPane();
 
     private final Label roomCodeLbl = new Label();
@@ -35,7 +34,7 @@ public class GuessDrawingScreen {
     private final Label timerLbl = new Label("Время: --");
 
     private final Button readyBtn = new Button("Ready");
-    private final TextField durationField = new TextField("60"); // только host
+    private final TextField durationField = new TextField("60");
     private final Button leaveBtn = new Button("Выйти");
 
     private final Canvas canvas = new Canvas(650, 450);
@@ -49,15 +48,12 @@ public class GuessDrawingScreen {
     private final Label statusLbl = new Label("Статус: ...");
     private final Button endGameBtn = new Button("Закончить игру");
 
-    // state
     private boolean inGame = false;
     private boolean iAmReady = false;
     private boolean startRequested = false;
 
-    // drawing
     private double lastX, lastY;
 
-    // timer
     private Timeline timeline;
     private int secondsLeft = 0;
 
@@ -151,7 +147,6 @@ public class GuessDrawingScreen {
                     return;
                 }
 
-                // payload: "x1;y1;x2;y2"
                 String payload = msg.getPayload();
                 if (payload == null || payload.isBlank()) return;
 
@@ -228,7 +223,6 @@ public class GuessDrawingScreen {
         }
     }
 
-    // ---------------- UI ----------------
 
     private void buildUi() {
         root.setPadding(new Insets(10));
@@ -300,7 +294,6 @@ public class GuessDrawingScreen {
         statusLbl.setText("Статус: Лобби. Все нажимают Ready — игра стартует автоматически.");
     }
 
-    // ---------------- Buttons ----------------
 
     private void wireButtons() {
         readyBtn.setOnAction(e -> toggleReady());
@@ -427,7 +420,6 @@ public class GuessDrawingScreen {
         }
     }
 
-    // ---------------- Drawing ----------------
 
     private void wireDrawing() {
         canvas.setOnMousePressed(e -> {
@@ -461,7 +453,6 @@ public class GuessDrawingScreen {
         });
     }
 
-    // ---------------- Timer ----------------
 
     private void startTimer(int seconds) {
         stopTimer();
@@ -480,7 +471,7 @@ public class GuessDrawingScreen {
             }
         }));
 
-        timeline.setCycleCount(secondsLeft); // ровно N тиков
+        timeline.setCycleCount(secondsLeft);
         timeline.playFromStart();
     }
 
@@ -497,7 +488,6 @@ public class GuessDrawingScreen {
         gc.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
     }
 
-    // ---------------- helpers ----------------
 
     private static Integer parseIntSafe(String s) {
         if (s == null) return null;
@@ -508,7 +498,6 @@ public class GuessDrawingScreen {
         }
     }
 
-    // Парсер для payload вида "k=v;k2=v2" (для START/ERROR/CORRECT/ROUND_UPDATE) [file:96]
     private static Map<String, String> parseKvPayload(String payload) {
         Map<String, String> map = new HashMap<>();
         if (payload == null || payload.isBlank()) return map;

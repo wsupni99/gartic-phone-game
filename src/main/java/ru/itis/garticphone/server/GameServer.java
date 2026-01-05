@@ -36,7 +36,7 @@ public class GameServer {
                 synchronized (players) {
                     players.put(clientSocket, handler.getPlayer());
                 }
-                executorService.submit(handler); // Пул потоков
+                executorService.submit(handler);
             }
         } catch (IOException e) {
             e.printStackTrace();

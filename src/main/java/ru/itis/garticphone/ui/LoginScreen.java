@@ -49,7 +49,6 @@ public class LoginScreen extends Application {
         nameBox.setAlignment(Pos.CENTER);
         nameBox.setMaxWidth(320);
 
-        // Блок "Войти"
         VBox joinBlock = new VBox(8,
                 enterRoom,
                 roomIdField,
@@ -58,17 +57,15 @@ public class LoginScreen extends Application {
         joinBlock.setAlignment(Pos.CENTER);
         joinBlock.setMaxWidth(320);
 
-        // Блок "Создать комнату"
         VBox createBlock = new VBox(8, create);
         createBlock.setAlignment(Pos.CENTER);
         createBlock.setMaxWidth(320);
 
-        // Вертикальный стек: Войти → ИЛИ → Создать
         VBox actions = new VBox(20, joinBlock, createBlock);
         actions.setAlignment(Pos.CENTER);
 
         layout.setAlignment(Pos.CENTER);
-        layout.setPadding(new Insets(40));  // отступы по краям
+        layout.setPadding(new Insets(40));
         lobbyTitle.setStyle("-fx-font-size: 28px; -fx-font-weight: bold;");
         error.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
         layout.setSpacing(5);

@@ -388,7 +388,6 @@ public class GameService {
         }
         if (room == null) return;
 
-        // если раунд уже сменился (был CORRECT и стартанули новый) — игнорируем старую задачу
         if (token != room.getRoundToken()) return;
 
         String secret = secretWords.get(roomId);
@@ -452,15 +451,17 @@ public class GameService {
         next.send(update);
     }
     private void handleEndGame(Player host, Message message) {
+
         int roomId = message.getRoomId();
         GameState room = rooms.get(roomId);
         if (room == null) return;
 
-        roundScheduler.shutdownNow();
+        room.nextRoundToken();
+        secretWords.remove(roomId);
 
         List<Player> playersWithoutHost = new ArrayList<>();
         for (Player p : room.getPlayers()) {
-            if (!room.isHost(p.getId())) {  // пропускаем хоста
+            if (!room.isHost(p.getId())) {
                 playersWithoutHost.add(p);
             }
         }
