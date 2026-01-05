@@ -28,7 +28,7 @@ public class GameService {
     }
 
     public void onDisconnect(Player player) {
-        handleLeave(player);
+        player.setState(PlayerState.DISCONNECTED);
     }
 
     public void routeMessage(Player player, Message message) {
@@ -129,7 +129,6 @@ public class GameService {
     }
 
     public void handleLeave(Player player) {
-        player.setState(PlayerState.DISCONNECTED);
 
         synchronized (rooms) {
             Iterator<Map.Entry<Integer, GameState>> it = rooms.entrySet().iterator();
