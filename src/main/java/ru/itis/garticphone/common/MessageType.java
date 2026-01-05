@@ -8,7 +8,6 @@ public enum MessageType {
     CORRECT,
     READY,
     START,
-    TEXT_SUBMIT,
     ROUND_UPDATE,
     LEAVE,
     ERROR,

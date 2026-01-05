@@ -76,19 +76,6 @@ public class GameService {
                 break;
             case DRAW:
             case GUESS:
-            case TEXT_SUBMIT:
-                if (player.isInGame()) {
-                    switch (message.getType()) {
-                        case DRAW -> handleDraw(player, message);
-                        case GUESS -> handleGuess(player, message);
-                        case TEXT_SUBMIT -> handleTextSubmit(player, message);
-                        default -> {
-                        }
-                    }
-                } else {
-                    sendError(player, "400", "Game actions are allowed only in game");
-                }
-                break;
             case END_GAME:
                 int roomId = message.getRoomId();
                 GameState room = rooms.get(roomId);
